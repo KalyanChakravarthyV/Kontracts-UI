@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import supertokens from 'supertokens-node';
 import { middleware, errorHandler } from 'supertokens-node/framework/express';
-import { SuperTokensConfig, getWebsiteDomain } from './auth/supertokens-config.ts';
+import { SuperTokensConfig, getWebsiteDomain } from './auth/supertokens-config.js';
 import { authLogger, logApiRequest, logAuthEvent } from './lib/logger.js';
 
 // Initialize SuperTokens

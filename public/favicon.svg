@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Background circle -->
+  <circle cx="16" cy="16" r="16" fill="#2563eb"/>
+
+  <!-- Document shape -->
+  <path d="M9 7 C9 6.5 9.5 6 10 6 L19 6 L23 10 L23 25 C23 25.5 22.5 26 22 26 L10 26 C9.5 26 9 25.5 9 25 Z"
+        fill="#ffffff" stroke="none"/>
+
+  <!-- Folded corner -->
+  <path d="M19 6 L19 10 L23 10" fill="#e0e7ff" stroke="none"/>
+
+  <!-- Dollar sign -->
+  <text x="16" y="20" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#2563eb" text-anchor="middle">$</text>
+
+  <!-- Horizontal lines representing text/contract lines -->
+  <rect x="11" y="12" width="10" height="1" fill="#93c5fd" rx="0.5"/>
+  <rect x="11" y="22" width="10" height="0.8" fill="#93c5fd" rx="0.4"/>
+</svg>
