@@ -1954,6 +1954,17 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                 ))}
               </div>
             ) : (
+              <div>
+                <div className='flex items-center justify-between'>
+          <h4 className='text-lg font-semibold'>ASC 842 Compliance Schedules</h4>
+          <button
+            onClick={() => setShowScheduleForm(!showScheduleForm)}
+            className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
+            data-testid='button-new-asc842-schedule'
+          >
+            <i className='fas fa-plus mr-2'></i>Create A Lease
+          </button>
+        </div>
               <table className='w-full text-sm'>
                 <thead>
                   <tr className='border-b border-border'>
@@ -2085,6 +2096,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                   )}
                 </tbody>
               </table>
+              </div>
             )}
 
             {/* Pagination */}
