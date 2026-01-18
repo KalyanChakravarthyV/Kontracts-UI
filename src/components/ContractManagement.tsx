@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import { CREATE_LEASE_FORM_FIELDS } from '@/Utils/createLeaseFormFields';
 import {
   Select,
   SelectContent,
@@ -27,6 +28,10 @@ interface ContractManagementProps {
 export function ContractManagement({ initialTab = 'contracts' }: ContractManagementProps = {}) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
+  
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+  const [showCreateLeaseForm, setShowCreateLeaseForm] = useState<boolean>(false);
+  
   const [selectedContractForSchedule, setSelectedContractForSchedule] = useState<string>('');
   const [scheduleParams, setScheduleParams] = useState({
     // ASC 842 properties
@@ -46,6 +51,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const { data: contracts, isLoading: contractsLoading } = useQuery({
     queryKey: ['/api/contracts'],
   });
+  type FieldType = "text" | "select";
 
   const complianceScheduleMutation = useMutation({
     mutationFn: async ({
@@ -514,7 +520,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     const [selectedScheduleDetails, setSelectedScheduleDetails] = useState<any>(null);
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
     const [showScheduleDetails, setShowScheduleDetails] = useState<boolean>(false);
-
     const { data: complianceSchedules } = useQuery({
       queryKey: ['/api/compliance-schedules'],
     });
@@ -1563,7 +1568,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       { value: '1', label: 'First Period (1)' },
       { value: 'last', label: 'Last Period' },
     ];
-
+    
     return (
       <div className='space-y-6'>
         <div className='flex items-center justify-between'>
@@ -1890,6 +1895,16 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       </div>
     );
   }
+  const handleDisplayCreateLeaseform = ()=>{
+    console.log("clicked")
+    setShowCreateLeaseForm(true)
+  }
+  const handleCreateLeaseInputs = (id: string, value: string) => {
+  setFormValues(prev => ({
+    ...prev,
+    [id]: value,
+  }));
+};
 
   return (
     <div className='mt-8 bg-card rounded-lg border border-border shadow-sm'>
@@ -1955,16 +1970,58 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
               </div>
             ) : (
               <div>
-                <div className='flex items-center justify-between'>
-          <h4 className='text-lg font-semibold'>ASC 842 Compliance Schedules</h4>
-          <button
-            onClick={() => setShowScheduleForm(!showScheduleForm)}
-            className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
-            data-testid='button-new-asc842-schedule'
-          >
-            <i className='fas fa-plus mr-2'></i>Create A Lease
-          </button>
-        </div>
+              <div className='flex items-center justify-between'>
+                  <h4 className='text-lg font-semibold'>Create a lease</h4>
+                  <button
+                    onClick={() => handleDisplayCreateLeaseform()}
+                    className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
+                    data-testid='button-new-asc842-schedule'
+                  >
+                    <i className='fas fa-plus mr-2'></i>Create A Lease 
+                  </button>
+                </div>
+                {showCreateLeaseForm ? <>
+  <>
+   
+    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
+  {CREATE_LEASE_FORM_FIELDS.map(field => (
+    <div key={field.id}>
+      <label className='block text-sm font-medium mb-2'>
+        {field.label}
+      </label>
+
+      {field.type === "text" && (
+        <input
+          type="text"
+          placeholder={field.placeholder}
+          value={formValues[field.id] || ""}
+          onChange={e => handleCreateLeaseInputs(field.id, e.target.value)}
+          className='w-full px-3 py-2 border border-border rounded-md bg-background'
+        />
+      )}
+
+      {field.type === "select" && (
+        <select
+          value={formValues[field.id] || ""}
+          onChange={e => handleCreateLeaseInputs(field.id, e.target.value)}
+          className='w-full px-3 py-2 border border-border rounded-md bg-background'
+        >
+          <option value=''>Select</option>
+          {field.options?.map(opt => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  ))}
+</div>
+
+
+
+  </>
+                </>:''}
               <table className='w-full text-sm'>
                 <thead>
                   <tr className='border-b border-border'>
