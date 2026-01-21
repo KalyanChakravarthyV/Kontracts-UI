@@ -1916,7 +1916,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     await axios.post("https://api.kontracts.pro/api/v1/leases/", payload,
       {
       headers: {
-        Authorization: `Bearer ${"abc"}`, // token from auth
+        Authorization: `Bearer ${sessionStorage.getItem("accessToken")}`, // token from auth
         "Content-Type": "application/json",
       },
     }

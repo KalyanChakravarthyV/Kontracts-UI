@@ -24,7 +24,7 @@ const [createLeaseValues, setCreateLeaseValues] =
     getInitialCreateLeaseValues()
   );
 
-  // ✅ Change handler lives ONLY here
+  // Change handler
   const handleCreateLeaseInputs = (
     fieldId: string,
     value: string
