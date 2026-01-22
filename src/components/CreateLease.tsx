@@ -125,19 +125,20 @@ const isFormValid = React.useMemo(() => {
       {/* DATE */}
       {field.type === "date" && (
         <Calendar
-          mode="single"
-          selected={
-            createLeaseValues[field.id]
-              ? new Date(createLeaseValues[field.id])
-              : undefined
-          }
-          onSelect={(date) =>
-            handleCreateLeaseInputs(
-              field.id,
-              date ? date.toISOString().split("T")[0] : ""
-            )
-          }
-        />
+  mode="single"
+  selected={
+    createLeaseValues[field.id]
+      ? new Date(createLeaseValues[field.id])
+      : undefined
+  }
+  onSelect={(date) =>
+    handleCreateLeaseInputs(
+      field.id,
+      date ? date.toLocaleDateString("en-CA") : ""
+    )
+  }
+/>
+
       )}
     </div>
   ))}
