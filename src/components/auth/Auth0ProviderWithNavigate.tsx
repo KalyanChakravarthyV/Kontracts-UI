@@ -23,7 +23,6 @@ export function Auth0ProviderWithNavigate({ children }: Auth0ProviderWithNavigat
         redirect_uri: redirectUri,
         audience: audience || undefined,
       }}
-      useRefreshTokens
       cacheLocation='localstorage'
       onRedirectCallback={onRedirectCallback}
     >
