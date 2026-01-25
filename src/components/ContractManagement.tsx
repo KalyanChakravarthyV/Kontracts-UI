@@ -5,6 +5,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
 import CreateLease from "./CreateLease";
 import axios from "axios";
+import { useAuth0 } from '@auth0/auth0-react';
+
 
 import {
   Select,
@@ -49,9 +51,37 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+
+
+
+  const { getAccessTokenSilently } = useAuth0();
+  
+  const getLeasesApi = async () => {
+    try {
+      const token = await getAccessTokenSilently();
+      
+
+      const response = await fetch('https://api.kontracts.pro/api/v1/leases/', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      return data;
+
+    } catch (error) {
+      console.error('API call failed:', error);
+    }
+    return []
+  };
+
+
   const { data: contracts, isLoading: contractsLoading } = useQuery({
     queryKey: ['/api/contracts'],
-  });
+    queryFn: getLeasesApi});
+  
+
   type FieldType = "text" | "select";
 
   const complianceScheduleMutation = useMutation({
@@ -247,10 +277,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       payments?.map((payment: any) => {
         const contract = contracts?.find((c: any) => c.id === payment.contractId);
         return {
-          ...payment,
-          contractName: contract?.name || 'Unknown Contract',
-          vendor: contract?.vendor || 'Unknown Vendor',
-          dueDate: new Date(payment.dueDate),
+          // ...payment,
+          contractName: contract?.lease_name || 'Unknown Contract',
+          vendor: contract?.lessor_name || 'Unknown Vendor',
+          dueDate: new Date(contract?.end_date),
         };
       }) || [];
 
@@ -1910,13 +1940,20 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     updated_at: now,
   };
 
+
+
+  // if (isLoading) return <div>Loading...</div>;
+
+
   console.log("submitted create lease payload", payload);
 
   try {
+    const accessToken = await getAccessTokenSilently();
+
     await axios.post("https://api.kontracts.pro/api/v1/leases/", payload,
       {
       headers: {
-        Authorization: `Bearer ${sessionStorage.getItem("accessToken")}`, // token from auth
+        Authorization: `Bearer ${accessToken}`, // token from auth
         "Content-Type": "application/json",
       },
     }
@@ -2052,25 +2089,25 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                               className='font-medium'
                               data-testid={`text-contract-name-${contract.id}`}
                             >
-                              {contract.name}
+                              {contract.lease_name}
                             </p>
                             <p
                               className='text-xs text-muted-foreground'
                               data-testid={`text-vendor-${contract.id}`}
                             >
-                              {contract.vendor}
+                              {contract.lessor_name}
                             </p>
                           </div>
                         </td>
                         <td className='py-4 px-4'>
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contract.type)}`}
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contract.classification)}`}
                             data-testid={`badge-type-${contract.id}`}
                           >
                             {contract.type}
                           </span>
                         </td>
-                        <td
+                        {/* <td
                           className='py-4 px-4 text-muted-foreground'
                           data-testid={`text-payment-terms-${contract.id}`}
                         >
@@ -2087,7 +2124,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                           data-testid={`text-amount-${contract.id}`}
                         >
                           ${parseFloat(contract.amount).toLocaleString()}
-                        </td>
+                        </td> */}
                         <td className='py-4 px-4'>
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(contract.status)}`}
