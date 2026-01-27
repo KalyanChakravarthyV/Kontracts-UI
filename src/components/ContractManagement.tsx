@@ -1947,21 +1947,21 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
   console.log("submitted create lease payload", payload);
 
-  try {
-    const accessToken = await getAccessTokenSilently();
+try {
+  const accessToken = await getAccessTokenSilently();
 
-    await axios.post("https://api.kontracts.pro/api/v1/leases/", payload,
-      {
-      headers: {
-        Authorization: `Bearer ${accessToken}`, // token from auth
-        "Content-Type": "application/json",
-      },
-    }
-    );
-    console.log("Lease created successfully");
-  } catch (error) {
-    console.error("Error creating lease", error);
+  await axios.post("https://api.kontracts.pro/api/v1/leases/", payload,
+    {
+    headers: {
+      Authorization: `Bearer ${accessToken}`, // token from auth
+      "Content-Type": "application/json",
+    },
   }
+  );
+  console.log("Lease created successfully");
+} catch (error) {
+  console.error("Error creating lease", error);
+}
   }
 
   return (
