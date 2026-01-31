@@ -2,9 +2,9 @@ import React from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { CREATE_LEASE_FORM_FIELDS } from "@/Utils/createLeaseFormFields";
 
-type CreateLeaseValues = Record<string, string>;
+type CreateLeaseValues = Record<string, string | number>;
 const getInitialCreateLeaseValues = () =>
-  CREATE_LEASE_FORM_FIELDS.reduce<Record<string, string>>(
+  CREATE_LEASE_FORM_FIELDS.reduce<Record<string, string | number>>(
     (acc, field) => {
       acc[field.id] = "";
       return acc;
@@ -20,15 +20,19 @@ const CreateLease: React.FC<CreateLeaseProps> = ({
   handleSubmittedCreateLeaseFields
 }) => {
 const [createLeaseValues, setCreateLeaseValues] =
-  React.useState<Record<string, string>>(
+  React.useState<Record<string, string | number>>(
     getInitialCreateLeaseValues()
   );
 
   // Change handler
   const handleCreateLeaseInputs = (
     fieldId: string,
-    value: string
+    value: string | number,
+    type:string
   ) => {
+    if (type === "number") {
+      value = Number(value)
+    }
     setCreateLeaseValues((prev) => ({
       ...prev,
       [fieldId]: value,
@@ -64,7 +68,11 @@ const validateRequiredFields = () => {
 const isFormValid = React.useMemo(() => {
   return CREATE_LEASE_FORM_FIELDS.every(
     (field) =>
-      !field.required || createLeaseValues[field.id]?.trim()
+  !field.required ||
+  (typeof createLeaseValues[field.id] === "string"
+    ? createLeaseValues[field.id]?.trim().length > 0
+    : true)
+
   );
 }, [createLeaseValues]);
   return (
@@ -96,9 +104,9 @@ const isFormValid = React.useMemo(() => {
         <input
           type="number"
           placeholder={field.placeholder}
-          value={createLeaseValues[field.id] || ""}
+          value={createLeaseValues[field.id] || 0}
           onChange={(e) =>
-            handleCreateLeaseInputs(field.id, e.target.value)
+            handleCreateLeaseInputs(field.id, e.target.value, "number")
           }
           className="w-full px-3 py-2 border border-border rounded-md bg-background"
         />

@@ -3,10 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import CreateLease from "./CreateLease";
 import axios from "axios";
 import { useAuth0 } from '@auth0/auth0-react';
-
+import LeaseDetails from '@/components/LeaseDetails'
+import LeaseModal from '@/components/LeaseModal'
 
 import {
   Select,
@@ -34,7 +34,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [createLeaseValues, setCreateLeaseValues] = useState<Record<string, any>>({})
   const [showCreateLeaseForm, setShowCreateLeaseForm] = useState<boolean>(false);
-  
+  const [openLeaseModal, setOpenLeaseModal] = useState(false);
+
   const [selectedContractForSchedule, setSelectedContractForSchedule] = useState<string>('');
   const [scheduleParams, setScheduleParams] = useState({
     // ASC 842 properties
@@ -59,7 +60,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const getLeasesApi = async () => {
     try {
       const token = await getAccessTokenSilently();
-      
 
       const response = await fetch('https://api.kontracts.pro/api/v1/leases/', {
         headers: {
@@ -1928,40 +1928,26 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   }
   const handleDisplayCreateLeaseform = ()=>{
     console.log("clicked")
-    setShowCreateLeaseForm(true)
+    setOpenLeaseModal(true)
   }
   const handleSubmittedCreateLeaseFields = async(values: any) =>{
-    const now = new Date().toISOString();
+    console.log("submitted create lease payload", values);
 
-  const payload = {
-    ...values,          // take all UI values as-is
-    id: 1,              // or generate dynamically if needed
-    created_at: now,
-    updated_at: now,
-  };
+    try {
+      const accessToken = await getAccessTokenSilently();
 
-
-
-  // if (isLoading) return <div>Loading...</div>;
-
-
-  console.log("submitted create lease payload", payload);
-
-try {
-  const accessToken = await getAccessTokenSilently();
-
-  await axios.post("https://api.kontracts.pro/api/v1/leases/", payload,
-    {
-    headers: {
-      Authorization: `Bearer ${accessToken}`, // token from auth
-      "Content-Type": "application/json",
-    },
-  }
-  );
-  console.log("Lease created successfully");
-} catch (error) {
-  console.error("Error creating lease", error);
-}
+      await axios.post("https://api.kontracts.pro/api/v1/leases/", values,
+        {
+        headers: {
+          Authorization: `Bearer ${accessToken}`, // token from auth
+          "Content-Type": "application/json",
+        },
+      }
+      );
+      console.log("Lease created successfully");
+    } catch (error) {
+      console.error("Error creating lease", error);
+    }
   }
 
   return (
@@ -2028,8 +2014,8 @@ try {
               </div>
             ) : (
               <div>
-              <div className='flex items-center justify-between'>
-                  <h4 className='text-lg font-semibold'>Create lease</h4>
+              <div className='flex items-center justify-end'>
+                
                   <button
                     onClick={() => handleDisplayCreateLeaseform()}
                     className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
@@ -2038,18 +2024,20 @@ try {
                     <i className='fas fa-plus mr-2'></i>Create Lease 
                   </button>
                 </div>
-                {showCreateLeaseForm ? <>
-  <>
-   
-    <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
- <CreateLease
-      handleSubmittedCreateLeaseFields={handleSubmittedCreateLeaseFields}
-  />
-</div>
+                {openLeaseModal ? <>
+                
+                  
+                  {/* Lease Details Dialog */}
+   <LeaseModal
+  open={openLeaseModal}
+  onOpenChange={setOpenLeaseModal}
+>
+  <LeaseDetails onClose={() => setOpenLeaseModal(false)} />
+</LeaseModal>
 
 
 
-  </>
+                 
                 </>:''}
               <table className='w-full text-sm'>
                 <thead>
@@ -2083,7 +2071,7 @@ try {
                         className='border-b border-border hover:bg-muted/50 transition-colors'
                         data-testid={`contract-row-${contract.id}`}
                       >
-                        <td className='py-4 px-4'>
+                        <td className='py-4 px-4 cursor-pointer' onClick={handleDisplayCreateLeaseform}>
                           <div>
                             <p
                               className='font-medium'
