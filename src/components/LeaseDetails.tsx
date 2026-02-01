@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/lease-dashboard/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/lease-dashboard/ui/card';
 import { LeaseForm } from '@/components/lease-dashboard/LeaseForm';
@@ -14,7 +14,11 @@ import { FileText, DollarSign, BookOpen, Receipt } from 'lucide-react';
 import axios from "axios";
 import { useAuth0 } from '@auth0/auth0-react';
 
-export default function LeaseDetails() {
+type LeaseDetailsProps = {
+  contractId: number;
+};
+
+export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const [activeTab, setActiveTab] = useState('form');
 
   // Sample Payment Schedule Data
@@ -28,28 +32,59 @@ export default function LeaseDetails() {
 
   // Sample Journal Entries
   const sampleJournalEntries: JournalEntry[] = generateSampleJournalEntries();
+  useEffect(() => {
+    if (contractId) {
+      fetchPayments()
+    }
 
+  }, [contractId])
+  const fetchPayments = async () => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+        "https://api.kontracts.pro/api/v1/payments/",
+        {
+          params: {
+            skip: 0,
+            limit: 100,
+            contract_id: contractId,
+            sort_by: "due_date",
+            sort_order: "asc",
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      console.log("fetched payments successfully", response);
+    } catch (error) {
+      console.error("Error creating lease", error);
+    }
+  }
   const { getAccessTokenSilently } = useAuth0();
 
-  const handleSubmittedCreateLeaseFields = async(values: any) =>{
-      console.log("submitted create lease payload", values);
-  
-      try {
-        const accessToken = await getAccessTokenSilently();
-        console.log("accesstoken", accessToken)
-        await axios.post("https://api.kontracts.pro/api/v1/leases/", values,
-          {
+  const handleSubmittedCreateLeaseFields = async (values: any) => {
+    console.log("submitted create lease payload", values);
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      console.log("accesstoken", accessToken)
+      await axios.post("https://api.kontracts.pro/api/v1/leases/", values,
+        {
           headers: {
             Authorization: `Bearer ${accessToken}`, // token from auth
             "Content-Type": "application/json",
           },
         }
-        );
-        console.log("Lease created successfully");
-      } catch (error) {
-        console.error("Error creating lease", error);
-      }
+      );
+      console.log("Lease created successfully");
+    } catch (error) {
+      console.error("Error creating lease", error);
     }
+  }
+
   return (
     <div className="size-full overflow-auto bg-gray-50">
       <div className="container mx-auto py-8 px-4">
@@ -185,7 +220,7 @@ function generateSampleASC842(): ASC842ScheduleItem[] {
     const interestExpense = liability * discountRate;
     const amortization = rouAsset / 36;
     const principalReduction = monthlyRent - interestExpense;
-    
+
     liability = Math.max(0, liability - principalReduction);
     rouAsset = Math.max(0, rouAsset - amortization);
 
@@ -217,7 +252,7 @@ function generateSampleIFRS16(): IFRS16ScheduleItem[] {
     const date = new Date(2024, i - 1, 1);
     const interestExpense = liability * discountRate;
     const principalReduction = monthlyRent - interestExpense;
-    
+
     liability = Math.max(0, liability - principalReduction);
     rouAsset = Math.max(0, rouAsset - depreciationExpense);
 

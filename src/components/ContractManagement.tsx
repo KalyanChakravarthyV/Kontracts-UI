@@ -35,6 +35,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const [createLeaseValues, setCreateLeaseValues] = useState<Record<string, any>>({})
   const [showCreateLeaseForm, setShowCreateLeaseForm] = useState<boolean>(false);
   const [openLeaseModal, setOpenLeaseModal] = useState(false);
+  const [selectedLeaseId, setSelectedLeaseId] = useState<string>('');
 
   const [selectedContractForSchedule, setSelectedContractForSchedule] = useState<string>('');
   const [scheduleParams, setScheduleParams] = useState({
@@ -60,7 +61,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const getLeasesApi = async () => {
     try {
       const token = await getAccessTokenSilently();
-      console.log("token", token)
       const response = await fetch('https://api.kontracts.pro/api/v1/leases/', {
         headers: {
           Authorization: `Bearer ${token}`
@@ -1926,30 +1926,14 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       </div>
     );
   }
-  const handleDisplayCreateLeaseform = ()=>{
-    console.log("clicked")
+  const handleDisplayCreateLeaseform = (leaseId?: string)=>{
+    console.log("clicked", leaseId)
+    if (leaseId) {
+      setSelectedLeaseId(leaseId)
+    }
     setOpenLeaseModal(true)
   }
-  const handleSubmittedCreateLeaseFields = async(values: any) =>{
-    console.log("submitted create lease payload", values);
-
-    try {
-      const accessToken = await getAccessTokenSilently();
-
-      await axios.post("https://api.kontracts.pro/api/v1/leases/", values,
-        {
-        headers: {
-          Authorization: `Bearer ${accessToken}`, // token from auth
-          "Content-Type": "application/json",
-        },
-      }
-      );
-      console.log("Lease created successfully");
-    } catch (error) {
-      console.error("Error creating lease", error);
-    }
-  }
-
+  console.log("Selected lease id", selectedLeaseId)
   return (
     <div className='mt-8 bg-card rounded-lg border border-border shadow-sm'>
       <div className='p-6 border-b border-border'>
@@ -2032,7 +2016,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   open={openLeaseModal}
   onOpenChange={setOpenLeaseModal}
 >
-  <LeaseDetails onClose={() => setOpenLeaseModal(false)} />
+  <LeaseDetails contractId = {selectedLeaseId} onClose={() => setOpenLeaseModal(false)} />
 </LeaseModal>
 
 
@@ -2071,7 +2055,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                         className='border-b border-border hover:bg-muted/50 transition-colors'
                         data-testid={`contract-row-${contract.id}`}
                       >
-                        <td className='py-4 px-4 cursor-pointer' onClick={handleDisplayCreateLeaseform}>
+                        <td className='py-4 px-4 cursor-pointer' onClick={()=> handleDisplayCreateLeaseform(contract.id)}>
                           <div>
                             <p
                               className='font-medium'

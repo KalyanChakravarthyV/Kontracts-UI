@@ -20,7 +20,6 @@ import { Button } from "@/components/lease-dashboard/ui/button";
 import { Checkbox } from "@/components/lease-dashboard/ui/checkbox";
 import { createLeaseFormFields } from "@/Utils/createLeaseFormFields";
 import type { FieldConfig } from "@/Utils/createLeaseFormFields";
-import { useAuth0 } from '@auth0/auth0-react';
 
 export interface LeaseFormData {
   [key: string]: string | boolean | number | null;
@@ -57,8 +56,6 @@ const getInitialLeaseFormData = (): LeaseFormData => {
 };
 
 export function LeaseForm({ onSubmit }: LeaseFormProps) {
-  const { getAccessTokenSilently } = useAuth0();
-
   const [formData, setFormData] = useState<LeaseFormData>(
     getInitialLeaseFormData()
   );
@@ -78,11 +75,9 @@ const handleChange = (field: string, value: any) => {
 
   const handleSubmit = async(e: React.FormEvent) => {
     e.preventDefault();
-    console.log("form data", formData);
     onSubmit?.(formData);    
   };
 
-  // --------- Dynamic Field Renderer ----------
   const renderField = (field: FieldConfig) => {
     const commonProps = {
       value: formData[field.id] || "",
@@ -134,7 +129,6 @@ const handleChange = (field: string, value: any) => {
     }
   };
 
-  // --------- Main Render ----------
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
 
