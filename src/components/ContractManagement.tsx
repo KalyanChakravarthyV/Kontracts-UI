@@ -60,7 +60,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const getLeasesApi = async () => {
     try {
       const token = await getAccessTokenSilently();
-
+      console.log("token", token)
       const response = await fetch('https://api.kontracts.pro/api/v1/leases/', {
         headers: {
           Authorization: `Bearer ${token}`

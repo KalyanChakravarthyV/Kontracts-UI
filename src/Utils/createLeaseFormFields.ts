@@ -1,127 +1,192 @@
-export type CreateLeaseField = {
+
+
+export type FieldType =
+  | "text"
+  | "number"
+  | "email"
+  | "phone"
+  | "date"
+  | "textarea"
+  | "select"
+  | "checkbox";
+
+export interface FieldConfig {
   id: string;
   label: string;
-  type: "text" | "select" | "date" | "number";
-  required: boolean;
-  placeholder?: string;
-  options?: { label: string; value: string }[];
-};
+  type: FieldType;
+  required?: boolean;
+  options?: string[];
+}
 
-export const CREATE_LEASE_FORM_FIELDS: CreateLeaseField[] = [
+export interface SectionConfig {
+  section: string;
+  description?: string;
+  fields: FieldConfig[];
+}
+
+export const createLeaseFormFields: SectionConfig[] = [
+  // 1. Lease Identification
   {
-    id: "lease_name",
-    label: "Lease Name",
-    type: "text",
-    required: true,
-    placeholder: "Enter lease name",
-  },
-  {
-    id: "lessor_name",
-    label: "Lessor Name",
-    type: "text",
-    required: true,
-    placeholder: "Enter lessor name",
-  },
-  {
-    id: "lessee_name",
-    label: "Lessee Name",
-    type: "text",
-    required: true,
-    placeholder: "Enter lessee name",
-  },
-  {
-    id: "contract_type",
-    label: "Contract Type",
-    type: "text",
-     required: false,
-    placeholder: "Enter contract type",
-  },
-  {
-    id: "status",
-    label: "Status",
-    type: "select",
-     required: false,
-    options: [
-      { label: "Active", value: "active" },
-      { label: "Inactive", value: "inactive" },
+    section: "Lease Identification",
+    description: "Basic lease information and identifiers",
+    fields: [
+      { id: "document_id", label: "Document ID", type: "text", required: false },
+      { id: "lease_id", label: "Lease ID", type: "text", required: true },
+      { id: "lease_name", label: "Lease Name", type: "text", required: true },
+      { id: "lessor_name", label: "Lessor Name", type: "text", required: true },
+      {
+        id: "contract_type",
+        label: "Contract Type",
+        type: "select",
+        options: ["real-estate", "equipment", "vehicle"],
+      },
+      {
+        id: "status",
+        label: "Status",
+        type: "select",
+        options: ["draft", "active", "expired", "terminated"],
+      },
     ],
   },
+
+  // 2. Tenant Information
   {
-    id: "document_id",
-    label: "Document ID",
-    type: "text",
-     required: false,
-    placeholder: "Enter document reference",
+    section: "Tenant Information",
+    description: "Details about the lessee",
+    fields: [
+      { id: "lessee_name", label: "Tenant Name", type: "text", required: true },
+      { id: "contact_person", label: "Contact Person", type: "text" },
+      { id: "email", label: "Email", type: "email" },
+      { id: "phone", label: "Phone", type: "phone" },
+    ],
   },
+
+  // 3. Property / Asset Information
   {
-    id: "commencement_date",
-    label: "Commencement Date",
-    type: "date",
-     required: true,
+    section: "Property / Asset Information",
+    description: "Details about the leased asset",
+    fields: [
+      { id: "property_address", label: "Property Address", type: "text" },
+      {
+        id: "property_type",
+        label: "Property Type",
+        type: "select",
+        options: ["office", "retail", "industrial", "warehouse", "residential"],
+      },
+      { id: "asset_class", label: "Asset Class", type: "text" },
+      {
+        id: "asset_description",
+        label: "Asset Description",
+        type: "textarea",
+      },
+    ],
   },
+
+  // 4. Lease Dates
   {
-    id: "end_date",
-    label: "End Date",
-    type: "date",
-     required: true,
+    section: "Lease Dates",
+    description: "Key dates for the lease",
+    fields: [
+      {
+        id: "commencement_date",
+        label: "Commencement Date",
+        type: "date",
+        required:true
+      },
+      {
+        id: "lease_start_date",
+        label: "Lease Start Date",
+        type: "date",
+      },
+      {
+        id: "end_date",
+        label: "Lease End Date",
+        type: "date",
+        required:true
+      },
+      {
+        id: "rent_start_date",
+        label: "Rent Start Date",
+        type: "date",
+      },
+    ],
   },
+
+  // 5. Accounting Classification
   {
-    id: "payment_terms",
-    label: "Payment Terms",
-    type: "text",
-     required: false,
-    placeholder: "Enter payment terms",
+    section: "Accounting Classification",
+    description: "IFRS / ASC details",
+    fields: [
+      {
+        id: "accounting_standard",
+        label: "Accounting Standard",
+        type: "select",
+        options: ["ASC842", "IFRS16"],
+      },
+      {
+        id: "classification",
+        label: "Lease Classification",
+        type: "select",
+        required:true,
+        options: ["operating", "finance"],
+      },
+      {
+        id: "incremental_borrowing_rate",
+        label: "Incremental Borrowing Rate",
+        type: "number",
+        required:true
+      },
+      { id: "discount_rate", label: "Discount Rate", type: "number" },
+      { id: "residual_value", label: "Residual Value", type: "number" },
+    ],
   },
+
+  // 6. Lease Options
   {
-    id: "initial_direct_costs",
-    label: "Initial Direct Costs",
-    type: "number",
-     required: false,
-    placeholder: "0",
+    section: "Lease Options",
+    description: "Renewal and purchase options",
+    fields: [
+      {
+        id: "renewal_option_available",
+        label: "Renewal Option Available",
+        type: "checkbox",
+      },
+      {
+        id: "purchase_option_available",
+        label: "Purchase Option Available",
+        type: "checkbox",
+      },
+    ],
   },
+
+  // 7. Financial & Adjustments
   {
-    id: "prepaid_rent",
-    label: "Prepaid Rent",
-    type: "number",
-     required: false,
-    placeholder: "0",
+    section: "Financial & Adjustments",
+    fields: [
+      { id: "payment_terms", label: "Payment Terms", type: "text" },
+      {
+        id: "initial_direct_costs",
+        label: "Initial Direct Costs",
+        type: "number",
+      },
+      { id: "prepaid_rent", label: "Prepaid Rent", type: "number" },
+      {
+        id: "lease_incentives",
+        label: "Lease Incentives",
+        type: "number",
+      },
+    ],
   },
+
+  // 8. Additional Notes
   {
-    id: "lease_incentives",
-    label: "Lease Incentives",
-    type: "number",
-     required: false,
-    placeholder: "0",
-  },
-  {
-    id: "residual_value",
-    label: "Residual Value",
-    type: "number",
-     required: false,
-    placeholder: "0",
-  },
-  {
-    id: "incremental_borrowing_rate",
-    label: "Incremental Borrowing Rate",
-    type: "number",
-     required: true,
-    placeholder: "0",
-  },
-  {
-    id: "discount_rate",
-    label: "Discount Rate",
-    type: "number",
-     required: false,
-    placeholder: "0",
-  },
-  {
-    id: "classification",
-    label: "Classification",
-    type: "select",
-     required: false,
-    options: [
-      { label: "Operating", value: "operating" },
-      { label: "Finance", value: "finance" },
+    section: "Additional Notes",
+    fields: [
+      {
+        id: "additional_notes",
+        label: "Additional Notes",
+        type: "textarea",
+      },
     ],
   },
 ];

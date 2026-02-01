@@ -11,8 +11,10 @@ import type { IFRS16ScheduleItem } from '@/components/lease-dashboard/IFRS16Sche
 import { JournalEntries } from '@/components/lease-dashboard/JournalEntries';
 import type { JournalEntry } from '@/components/lease-dashboard/JournalEntries';
 import { FileText, DollarSign, BookOpen, Receipt } from 'lucide-react';
+import axios from "axios";
+import { useAuth0 } from '@auth0/auth0-react';
 
-export default function App() {
+export default function LeaseDetails() {
   const [activeTab, setActiveTab] = useState('form');
 
   // Sample Payment Schedule Data
@@ -27,6 +29,27 @@ export default function App() {
   // Sample Journal Entries
   const sampleJournalEntries: JournalEntry[] = generateSampleJournalEntries();
 
+  const { getAccessTokenSilently } = useAuth0();
+
+  const handleSubmittedCreateLeaseFields = async(values: any) =>{
+      console.log("submitted create lease payload", values);
+  
+      try {
+        const accessToken = await getAccessTokenSilently();
+        console.log("accesstoken", accessToken)
+        await axios.post("https://api.kontracts.pro/api/v1/leases/", values,
+          {
+          headers: {
+            Authorization: `Bearer ${accessToken}`, // token from auth
+            "Content-Type": "application/json",
+          },
+        }
+        );
+        console.log("Lease created successfully");
+      } catch (error) {
+        console.error("Error creating lease", error);
+      }
+    }
   return (
     <div className="size-full overflow-auto bg-gray-50">
       <div className="container mx-auto py-8 px-4">
@@ -72,7 +95,7 @@ export default function App() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <LeaseForm onSubmit={(data) => console.log('Lease data:', data)} />
+                <LeaseForm onSubmit={(data) => handleSubmittedCreateLeaseFields(data)} />
               </CardContent>
             </Card>
           </TabsContent>
