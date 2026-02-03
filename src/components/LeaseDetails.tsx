@@ -20,6 +20,7 @@ type LeaseDetailsProps = {
 
 export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const [activeTab, setActiveTab] = useState('form');
+  const [paymentScheduleData, setPaymentScheduleData] = useState([])
 
   // Sample Payment Schedule Data
   const samplePayments: PaymentScheduleItem[] = generateSamplePayments();
@@ -57,13 +58,19 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           },
         }
       );
-
-      console.log("fetched payments successfully", response);
+      if (response && response?.data && response?.data?.length) {
+          setPaymentScheduleData(response.data)
+      }
+      
+      console.log("fetched payments successfully", response.data);
     } catch (error) {
       console.error("Error creating lease", error);
     }
   }
   const { getAccessTokenSilently } = useAuth0();
+  const handleAddPayment = (data: any)=>{
+    console.log("data", data)
+  }
 
   const handleSubmittedCreateLeaseFields = async (values: any) => {
     console.log("submitted create lease payload", values);
@@ -136,7 +143,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           </TabsContent>
 
           <TabsContent value="payments">
-            <PaymentSchedule payments={samplePayments} currency="USD" />
+            <PaymentSchedule contractId={contractId} paymentsList={paymentScheduleData} onPaymentAdded={handleAddPayment} currency="USD" />
           </TabsContent>
 
           <TabsContent value="asc842">
