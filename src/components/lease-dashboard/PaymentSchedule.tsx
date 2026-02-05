@@ -4,8 +4,9 @@ import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
 import { DollarSign, TrendingUp, Calendar, Plus, Save, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
+import AppAlert from '@/components/common/AppAlert';
 
 // API Response type
 export interface PaymentApiResponse {
@@ -22,14 +23,11 @@ export interface PaymentApiResponse {
 export interface PaymentScheduleItem {
   period: number;                    // calculated
   due_date: string;                  // from due_date
-  amount: number;                    // from amount (for now)
-  cam: number;                       // 0 for now
-  insurance: number;                 // 0 for now
-  propertyTax: number;               // 0 for now
-  totalPayment: number;              // from amount (for now)
-  principalPayment: number;          // calculated
-  interestPayment: number;           // calculated
-  leaseliabilityBalance: number;     // calculated
+  amount: number;
+  type: string;                    // from amount (for now)             // from amount (for now)
+  principal: number,
+  interest: number,
+  liablity_balance: number,    // calculated
   status: 'paid' | 'pending' | 'upcoming';
   paid_date?: string;                // from paid_date
 }
@@ -38,9 +36,10 @@ export interface PaymentScheduleItem {
 export interface NewPaymentRow {
   due_date: string;
   amount: string;
-  cam: string;
-  insurance: string;
-  propertyTax: string;
+  type: string;
+  principal: '',
+  interest: '',
+  liablity_balance: '',
   status: 'Paid' | 'Scheduled';
   paid_date: string;
 }
@@ -63,18 +62,34 @@ export function PaymentSchedule({
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [payments, setPayments] = useState<PaymentScheduleItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  const [alertMessage, setAlertMessage] = useState('')
+  const lastInputRef = useRef<HTMLInputElement | null>(null);
+
   const [newRow, setNewRow] = useState<NewPaymentRow>({
     due_date: '',
     amount: '',
-    cam: '',
-    insurance: '',
-    propertyTax: '',
+    type: '',
+    principal: '',
+    interest: '',
+    liablity_balance: '',
     status: 'Scheduled',
     paid_date: ''
   });
   useEffect(()=>{
     setPayments(paymentsList)
   },[paymentsList])
+
+useEffect(() => {
+  if (isAddingRow && lastInputRef.current) {
+    setTimeout(() => {
+      lastInputRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+      lastInputRef.current?.focus({ preventScroll: true });
+    }, 0);
+  }
+}, [isAddingRow]);
   const { getAccessTokenSilently } = useAuth0();
   const formatCurrency = (amount: number) => {
     if (!amount) return '-';
@@ -154,9 +169,10 @@ const getStatusBadge = (status: string) => {
     setNewRow({
       due_date: '',
       amount: '',
-      cam: '',
-      insurance: '',
-      propertyTax: '',
+      type: '',
+      principal: '',
+      interest: '',
+      liablity_balance: '',
       status: 'Scheduled',
       paid_date: ''
     });
@@ -168,9 +184,10 @@ const getStatusBadge = (status: string) => {
     setNewRow({
       due_date: '',
       amount: '',
-      cam: '',
-      insurance: '',
-      propertyTax: '',
+      type:'',
+      principal: '',
+      interest: '',
+      liablity_balance: '',
       status: 'Scheduled',
       paid_date: ''
     });
@@ -183,22 +200,25 @@ const getStatusBadge = (status: string) => {
       setIsSaving(true);
 
       // Validate required fields
-      if (!newRow.due_date || !newRow.amount) {
-        alert('Due Date and Amount are required fields');
+     const requiredFields = {
+        due_date: 'Due Date',
+        type: 'Type',
+        amount: 'Amount'
+      };
+
+      const missingFields = Object.entries(requiredFields)
+        .filter(([key]) => !newRow[key as keyof typeof newRow])
+        .map(([, label]) => label);
+
+      if (missingFields.length) {
+        setAlertMessage(`${missingFields.join(', ')} ${missingFields.length > 1 ? 'are' : 'is'} required`);
         return;
       }
-
-      // Calculate total amount
-      const amount = parseFloat(newRow.amount) || 0;
-      const cam = parseFloat(newRow.cam) || 0;
-      const insurance = parseFloat(newRow.insurance) || 0;
-      const propertyTax = parseFloat(newRow.propertyTax) || 0;
-      //const totalAmount = amount + cam + insurance + propertyTax;
 
       // Prepare payload for API
       const payload = {
         contract_id: contractId.toString(),
-        amount: amount,
+        amount: newRow.amount,
         due_date: new Date(newRow.due_date).toISOString(),
         status: newRow.status,
         paid_date: newRow.paid_date ? new Date(newRow.paid_date).toISOString() : null
@@ -233,9 +253,10 @@ const getStatusBadge = (status: string) => {
       setNewRow({
         due_date: '',
         amount: '',
-        cam: '',
-        insurance: '',
-        propertyTax: '',
+        type:'',
+        principal: '',
+        interest: '',
+        liablity_balance: '',
         status: 'Scheduled',
         paid_date: ''
       });
@@ -252,7 +273,11 @@ const getStatusBadge = (status: string) => {
   };
 
   return (
+    <>
+    <AppAlert message={alertMessage}
+          severity = 'error'/>
     <div className="space-y-6">
+      
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -314,11 +339,8 @@ const getStatusBadge = (status: string) => {
                 <TableRow>
                   <TableHead className="w-16">Period</TableHead>
                   <TableHead>Due Date</TableHead>
+                  <TableHead className="text-right">Type</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">CAM</TableHead>
-                  <TableHead className="text-right">Insurance</TableHead>
-                  <TableHead className="text-right">Property Tax</TableHead>
-                  <TableHead className="text-right">Total Payment</TableHead>
                   <TableHead className="text-right">Principal</TableHead>
                   <TableHead className="text-right">Interest</TableHead>
                   <TableHead className="text-right">Liability Balance</TableHead>
@@ -332,20 +354,11 @@ const getStatusBadge = (status: string) => {
                   <TableRow key={index}>
                     <TableCell>{index + 1}</TableCell>
                     <TableCell>{formatDate(payment.due_date)}</TableCell>
+                    <TableCell className="text-right">{payment.type}</TableCell>
                     <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {payment.cam === 0 ? '-' : formatCurrency(payment.cam)}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {payment.insurance === 0 ? '-' : formatCurrency(payment.insurance)}
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {payment.propertyTax === 0 ? '-' : formatCurrency(payment.propertyTax)}
-                    </TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.totalPayment)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.principalPayment)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.interestPayment)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.leaseliabilityBalance)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(payment.principal)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(payment.interest)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(payment.liablity_balance)}</TableCell>
                     <TableCell>{getStatusBadge(payment.status)}</TableCell>
                     <TableCell>{formatDate(payment.paid_date)}</TableCell>
                     {isAddingRow && <TableCell></TableCell>}
@@ -359,11 +372,24 @@ const getStatusBadge = (status: string) => {
                     <TableCell>
                       <Input
                         type="date"
+                        ref={lastInputRef}
                         value={newRow.due_date}
                         onChange={(e) => handleInputChange('due_date', e.target.value)}
                         className="w-full"
                         required
                       />
+                    </TableCell>
+                    <TableCell>
+                      <select
+                        value={newRow.type}
+                        onChange={(e) => handleInputChange('type', e.target.value)}
+                        className="w-full px-2 py-1 border rounded"
+                      > 
+                        <option value="base_rent">Base rent</option>
+                        <option value="cam">CAM</option>
+                        <option value="insurance">Insurance</option>
+                        <option value="property-tax">Property tax</option>
+                      </select>
                     </TableCell>
                     <TableCell>
                       <Input
@@ -376,44 +402,8 @@ const getStatusBadge = (status: string) => {
                         required
                       />
                     </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newRow.cam}
-                        onChange={(e) => handleInputChange('cam', e.target.value)}
-                        className="w-full text-right"
-                        step="0.01"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newRow.insurance}
-                        onChange={(e) => handleInputChange('insurance', e.target.value)}
-                        className="w-full text-right"
-                        step="0.01"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newRow.propertyTax}
-                        onChange={(e) => handleInputChange('propertyTax', e.target.value)}
-                        className="w-full text-right"
-                        step="0.01"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {formatCurrency(
-                        (parseFloat(newRow.amount) || 0) +
-                        (parseFloat(newRow.cam) || 0) +
-                        (parseFloat(newRow.insurance) || 0) +
-                        (parseFloat(newRow.propertyTax) || 0)
-                      )}
-                    </TableCell>
+                   
+                  
                     <TableCell className="text-muted-foreground text-right">-</TableCell>
                     <TableCell className="text-muted-foreground text-right">-</TableCell>
                     <TableCell className="text-muted-foreground text-right">-</TableCell>
@@ -463,5 +453,6 @@ const getStatusBadge = (status: string) => {
         </CardContent>
       </Card>
     </div>
+    </>
   );
 }
