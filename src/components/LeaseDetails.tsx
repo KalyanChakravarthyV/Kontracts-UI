@@ -13,12 +13,19 @@ import type { JournalEntry } from '@/components/lease-dashboard/JournalEntries';
 import { FileText, DollarSign, BookOpen, Receipt } from 'lucide-react';
 import axios from "axios";
 import { useAuth0 } from '@auth0/auth0-react';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
 
 type LeaseDetailsProps = {
   contractId: number;
 };
 
 export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
+  const dispatch = useAppDispatch();
+  const { leaseData } = useAppSelector(
+    (state) => state.existingLease
+  );
+  console.log("lease data", leaseData)
+  console.log("existing lease", leaseData)
   const [activeTab, setActiveTab] = useState('form');
   const [paymentScheduleData, setPaymentScheduleData] = useState([])
 
@@ -64,7 +71,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       
       console.log("fetched payments successfully", response.data);
     } catch (error) {
-      console.error("Error creating lease", error);
+      console.error("Error fetching payment", error);
     }
   }
   const { getAccessTokenSilently } = useAuth0();
@@ -137,7 +144,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <LeaseForm onSubmit={(data) => handleSubmittedCreateLeaseFields(data)} />
+                <LeaseForm existingLease={leaseData} onSubmit={(data) => handleSubmittedCreateLeaseFields(data)} />
               </CardContent>
             </Card>
           </TabsContent>

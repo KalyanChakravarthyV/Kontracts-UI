@@ -7,6 +7,8 @@ import axios from "axios";
 import { useAuth0 } from '@auth0/auth0-react';
 import LeaseDetails from '@/components/LeaseDetails'
 import LeaseModal from '@/components/LeaseModal'
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { setExistingLease, clearExistingLease } from '@/store/slices/existingLeaseSlice';
 
 import {
   Select,
@@ -55,7 +57,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
 
 
-
+  const dispatch = useAppDispatch()
   const { getAccessTokenSilently } = useAuth0();
   
   const getLeasesApi = async () => {
@@ -1926,10 +1928,33 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       </div>
     );
   }
+  const fetchExistingLeaseDetails = async(contractId: string)=>{
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+       `https://api.kontracts.pro/api/v1/leases/${contractId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response && response?.data) {
+        dispatch(setExistingLease(response?.data));
+      }
+      
+      console.log("fetched existingLease data successfully", response.data);
+    } catch (error) {
+      console.error("Error creating lease", error);
+    }
+  }
   const handleDisplayCreateLeaseform = (leaseId?: string)=>{
     console.log("clicked", leaseId)
+    dispatch(clearExistingLease());
     if (leaseId) {
       setSelectedLeaseId(leaseId)
+      fetchExistingLeaseDetails(leaseId)
     }
     setOpenLeaseModal(true)
   }

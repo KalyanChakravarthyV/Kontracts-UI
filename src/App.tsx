@@ -12,6 +12,8 @@ import AccountSettings from "@/pages/account-settings";
 import AIRecommendations from "@/pages/ai-recommendations";
 import Auth from "@/pages/auth";
 import AuthCallback from "@/pages/auth-callback";
+import { Provider } from 'react-redux';
+import { store } from './store';
 
 function Router() {
   return (
@@ -35,12 +37,14 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <Provider store={store}>
       <AuthWrapper>
         <div>
           {/* <Toaster /> */}
           <Router />
         </div>
       </AuthWrapper>
+      </Provider>
     </QueryClientProvider>
   );
 }

@@ -404,9 +404,39 @@ const getStatusBadge = (status: string) => {
                     </TableCell>
                    
                   
-                    <TableCell className="text-muted-foreground text-right">-</TableCell>
-                    <TableCell className="text-muted-foreground text-right">-</TableCell>
-                    <TableCell className="text-muted-foreground text-right">-</TableCell>
+                    <TableCell className="text-muted-foreground text-right">
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={newRow.amount}
+                        onChange={(e) => handleInputChange('principal', e.target.value)}
+                        className="w-full text-right"
+                        step="0.01"
+                        required
+                      />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-right">
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={newRow.amount}
+                        onChange={(e) => handleInputChange('interest', e.target.value)}
+                        className="w-full text-right"
+                        step="0.01"
+                        required
+                      />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-right">
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={newRow.amount}
+                        onChange={(e) => handleInputChange('liablity_balance', e.target.value)}
+                        className="w-full text-right"
+                        step="0.01"
+                        required
+                      />
+                    </TableCell>
                     <TableCell>
                       <select
                         value={newRow.status}

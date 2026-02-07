@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ export interface LeaseFormData {
   [key: string]: string | boolean | number | null;
 }
 interface LeaseFormProps {
+  existingLease?: LeaseFormData | null;
   onSubmit?: (data: LeaseFormData) => void;
 }
 
@@ -55,11 +56,18 @@ const getInitialLeaseFormData = (): LeaseFormData => {
   return initialData;
 };
 
-export function LeaseForm({ onSubmit }: LeaseFormProps) {
+export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   const [formData, setFormData] = useState<LeaseFormData>(
     getInitialLeaseFormData()
   );
 
+  useEffect(() => {
+    if (existingLease) {
+      setFormData((prev) => ({ ...prev, ...existingLease }));
+    }
+  }, [existingLease]);
+
+  console.log("existing lease data in form", existingLease);
 const isFormValid = React.useMemo(() => {
   return createLeaseFormFields.every((section) =>
     section.fields.every((field) => {
