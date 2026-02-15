@@ -14,6 +14,7 @@ import { FileText, DollarSign, BookOpen, Receipt } from 'lucide-react';
 import axios from "axios";
 import { useAuth0 } from '@auth0/auth0-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { API_BASE_URL } from '@/config/api';
 
 type LeaseDetailsProps = {
   contractId: number;
@@ -50,7 +51,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     try {
       const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
-        "https://api.kontracts.pro/api/v1/payments/",
+        `${API_BASE_URL}/payments/`,
         {
           params: {
             skip: 0,
@@ -85,7 +86,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     try {
       const accessToken = await getAccessTokenSilently();
       console.log("accesstoken", accessToken)
-      await axios.post("https://api.kontracts.pro/api/v1/leases/", values,
+      await axios.post(`${API_BASE_URL}/leases/`, values,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`, // token from auth

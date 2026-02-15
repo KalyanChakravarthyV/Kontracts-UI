@@ -7,6 +7,7 @@ import { DollarSign, TrendingUp, Calendar, Plus, Save, X } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import AppAlert from '@/components/common/AppAlert';
+import { API_BASE_URL } from '@/config/api';
 
 // API Response type
 export interface PaymentApiResponse {
@@ -226,7 +227,7 @@ const getStatusBadge = (status: string) => {
 
       console.log('Posting payment:', payload);
       // Make POST API call
-      const response = await fetch('https://api.kontracts.pro/api/v1/payments/', {
+      const response = await fetch(`${API_BASE_URL}/payments/`, {
         method: 'POST',
         headers: {
             Authorization: `Bearer ${accessToken}`,

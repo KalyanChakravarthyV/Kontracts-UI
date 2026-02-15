@@ -9,6 +9,7 @@ import LeaseDetails from '@/components/LeaseDetails'
 import LeaseModal from '@/components/LeaseModal'
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setExistingLease, clearExistingLease } from '@/store/slices/existingLeaseSlice';
+import { API_BASE_URL } from '@/config/api';
 
 import {
   Select,
@@ -63,7 +64,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const getLeasesApi = async () => {
     try {
       const token = await getAccessTokenSilently();
-      const response = await fetch('https://api.kontracts.pro/api/v1/leases/', {
+      const response = await fetch(`${API_BASE_URL}/leases/`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -1932,7 +1933,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     try {
       const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
-       `https://api.kontracts.pro/api/v1/leases/${contractId}`,
+       `${API_BASE_URL}/leases/${contractId}`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
