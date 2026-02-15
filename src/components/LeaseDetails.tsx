@@ -5,7 +5,6 @@ import { LeaseForm } from '@/components/lease-dashboard/LeaseForm';
 import { PaymentSchedule } from '@/components/lease-dashboard/PaymentSchedule';
 import type { PaymentScheduleItem } from '@/components/lease-dashboard/PaymentSchedule';
 import { ASC842Schedule } from '@/components/lease-dashboard/ASC842Schedule';
-import type { ASC842ScheduleItem } from '@/components/lease-dashboard/ASC842Schedule';
 import { IFRS16Schedule } from '@/components/lease-dashboard/IFRS16Schedule';
 import type { IFRS16ScheduleItem } from '@/components/lease-dashboard/IFRS16Schedule';
 import { JournalEntries } from '@/components/lease-dashboard/JournalEntries';
@@ -29,12 +28,11 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   console.log("existing lease", leaseData)
   const [activeTab, setActiveTab] = useState('form');
   const [paymentScheduleData, setPaymentScheduleData] = useState([])
+  const [asc842ScheduleData, setASC842ScheduleData] = useState<any>(null)
 
   // Sample Payment Schedule Data
   const samplePayments: PaymentScheduleItem[] = generateSamplePayments();
 
-  // Sample ASC 842 Schedule Data
-  const sampleASC842: ASC842ScheduleItem[] = generateSampleASC842();
 
   // Sample IFRS 16 Schedule Data
   const sampleIFRS16: IFRS16ScheduleItem[] = generateSampleIFRS16();
@@ -44,6 +42,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   useEffect(() => {
     if (contractId) {
       fetchPayments()
+      fetchASC842Schedule()
     }
 
   }, [contractId])
@@ -75,6 +74,31 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       console.error("Error fetching payment", error);
     }
   }
+   const fetchASC842Schedule = async () => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+        `${API_BASE_URL}/schedules/asc842/${contractId}`,
+        {
+          params: {
+           format: "json"
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response?.data) {
+          setASC842ScheduleData(response.data)
+      }
+      
+      console.log("fetched asc842 schedule successfully", response.data);
+    } catch (error) {
+      console.error("Error fetching asc842 schedule", error);
+    }
+  }
+  
   const { getAccessTokenSilently } = useAuth0();
   const handleAddPayment = (data: any)=>{
     console.log("data", data)
@@ -156,10 +180,8 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
           <TabsContent value="asc842">
             <ASC842Schedule
-              schedule={sampleASC842}
+              schedule={asc842ScheduleData}
               classification="operating"
-              initialROU={360000}
-              initialLiability={360000}
               currency="USD"
             />
           </TabsContent>
@@ -221,38 +243,6 @@ function generateSamplePayments(): PaymentScheduleItem[] {
   return payments;
 }
 
-// Helper function to generate sample ASC 842 schedule
-function generateSampleASC842(): ASC842ScheduleItem[] {
-  const schedule: ASC842ScheduleItem[] = [];
-  const monthlyRent = 10000;
-  const discountRate = 0.05 / 12;
-  let rouAsset = 360000;
-  let liability = 360000;
-  const straightLineExpense = (36 * monthlyRent) / 36;
-
-  for (let i = 1; i <= 36; i++) {
-    const date = new Date(2024, i - 1, 1);
-    const interestExpense = liability * discountRate;
-    const amortization = rouAsset / 36;
-    const principalReduction = monthlyRent - interestExpense;
-
-    liability = Math.max(0, liability - principalReduction);
-    rouAsset = Math.max(0, rouAsset - amortization);
-
-    schedule.push({
-      period: i,
-      date: date.toISOString().split('T')[0],
-      leasePayment: monthlyRent,
-      interestExpense,
-      amortization,
-      rouAssetBalance: rouAsset,
-      leaseLiabilityBalance: liability,
-      straightLineExpense,
-    });
-  }
-
-  return schedule;
-}
 
 // Helper function to generate sample IFRS 16 schedule
 function generateSampleIFRS16(): IFRS16ScheduleItem[] {
