@@ -10,6 +10,7 @@ import IFRS16Compliance from "@/pages/ifrs16-schedules";
 import JournalEntries from "@/pages/journal-entries";
 import AccountSettings from "@/pages/account-settings";
 import AIRecommendations from "@/pages/ai-recommendations";
+import Contracts from "@/pages/contracts";
 import Auth from "@/pages/auth";
 import AuthCallback from "@/pages/auth-callback";
 import { Provider } from 'react-redux';
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/ai-recommendations" component={AIRecommendations} />
+      <Route path="/contracts" component={Contracts} />
       <Route path="/document-manager" component={DocumentManager} />
       <Route path="/asc842-schedules" component={ASC842Schedules} />
       <Route path="/ifrs16-compliance" component={IFRS16Compliance} />

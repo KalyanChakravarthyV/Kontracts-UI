@@ -2099,15 +2099,15 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                     <th className='text-left py-3 px-4 font-medium text-muted-foreground'>
                       Contract
                     </th>
+                    <th className='text-left py-3 px-4 font-medium text-muted-foreground'>
+                      Lessee
+                    </th>
                     <th className='text-left py-3 px-4 font-medium text-muted-foreground'>Type</th>
                     <th className='text-left py-3 px-4 font-medium text-muted-foreground'>
-                      Payment Terms
+                      Commencement
                     </th>
                     <th className='text-left py-3 px-4 font-medium text-muted-foreground'>
-                      Next Payment
-                    </th>
-                    <th className='text-left py-3 px-4 font-medium text-muted-foreground'>
-                      Amount
+                      End Date
                     </th>
                     <th className='text-left py-3 px-4 font-medium text-muted-foreground'>
                       Status
@@ -2119,12 +2119,18 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                 </thead>
                 <tbody>
                   {contracts && contracts.length > 0 ? (
-                    contracts.map((contract: any) => (
-                      <tr
-                        key={contract.id}
-                        className='border-b border-border hover:bg-muted/50 transition-colors'
-                        data-testid={`contract-row-${contract.id}`}
-                      >
+                    contracts.map((contract: any) => {
+                      const contractTypeLabel =
+                        contract.classification || contract.contract_type || 'N/A';
+                      const formatDate = (value?: string | null) =>
+                        value ? new Date(value).toLocaleDateString() : 'N/A';
+
+                      return (
+                        <tr
+                          key={contract.id}
+                          className='border-b border-border hover:bg-muted/50 transition-colors'
+                          data-testid={`contract-row-${contract.id}`}
+                        >
                         <td className='py-4 px-4 cursor-pointer' onClick={()=> handleDisplayCreateLeaseform(contract.id)}>
                           <div>
                             <p
@@ -2141,32 +2147,32 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                             </p>
                           </div>
                         </td>
+                        <td
+                          className='py-4 px-4 text-muted-foreground'
+                          data-testid={`text-lessee-${contract.id}`}
+                        >
+                          {contract.lessee_name || 'N/A'}
+                        </td>
                         <td className='py-4 px-4'>
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contract.classification)}`}
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contractTypeLabel)}`}
                             data-testid={`badge-type-${contract.id}`}
                           >
-                            {contract.type}
+                            {contractTypeLabel}
                           </span>
                         </td>
-                        {/* <td
+                        <td
                           className='py-4 px-4 text-muted-foreground'
-                          data-testid={`text-payment-terms-${contract.id}`}
+                          data-testid={`text-commencement-${contract.id}`}
                         >
-                          {contract.paymentTerms}
+                          {formatDate(contract.commencement_date)}
                         </td>
                         <td
                           className='py-4 px-4 text-muted-foreground'
-                          data-testid={`text-next-payment-${contract.id}`}
+                          data-testid={`text-end-date-${contract.id}`}
                         >
-                          {new Date(contract.nextPayment).toLocaleDateString()}
+                          {formatDate(contract.end_date)}
                         </td>
-                        <td
-                          className='py-4 px-4 font-medium'
-                          data-testid={`text-amount-${contract.id}`}
-                        >
-                          ${parseFloat(contract.amount).toLocaleString()}
-                        </td> */}
                         <td className='py-4 px-4'>
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(contract.status)}`}
@@ -2207,8 +2213,9 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                             </button>
                           </div>
                         </td>
-                      </tr>
-                    ))
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
                       <td colSpan={7} className='py-8 text-center text-muted-foreground'>

@@ -105,6 +105,19 @@ export function Sidebar() {
             </h3>
           )}
           <Link
+            href='/contracts'
+            className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
+              location === '/contracts'
+                ? 'bg-accent text-accent-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            }`}
+            data-testid='link-contracts'
+            title={isCollapsed ? 'Contracts' : ''}
+          >
+            <i className='fas fa-file-signature w-5'></i>
+            {!isCollapsed && <span>Contracts</span>}
+          </Link>
+          <Link
             href='/document-manager'
             className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
               location === '/document-manager'
