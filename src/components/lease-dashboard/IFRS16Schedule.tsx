@@ -2,6 +2,36 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/lease-dashboard/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/lease-dashboard/ui/tabs';
 import { Badge } from '@/components/lease-dashboard/ui/badge';
+import { Button } from '@/components/lease-dashboard/ui/button';
+import { Download } from 'lucide-react';
+import { useAppSelector } from '@/store/hooks';
+
+export interface IFRS16ScheduleEntry {
+  period: number;
+  period_date: string;
+  lease_payment: number;
+  interest_expense: number;
+  principal_reduction: number;
+  lease_liability_beginning: number;
+  lease_liability_ending: number;
+  rou_asset_beginning: number;
+  amortization: number;
+  rou_asset_ending: number;
+  total_expense: number;
+}
+
+export interface IFRS16ScheduleData {
+  id?: number;
+  lease_id?: number;
+  initial_rou_asset: string;
+  initial_lease_liability: string;
+  total_payments: string;
+  total_interest: string;
+  total_depreciation: string;
+  schedule_data: {
+    entries: IFRS16ScheduleEntry[];
+  };
+}
 
 export interface IFRS16ScheduleItem {
   period: number;
@@ -15,36 +45,34 @@ export interface IFRS16ScheduleItem {
 }
 
 interface IFRS16ScheduleProps {
-  schedule: IFRS16ScheduleItem[];
-  initialROU: number;
-  initialLiability: number;
+  schedule: IFRS16ScheduleData;
   currency?: string;
+  onExport?: () => void;
 }
 
 export function IFRS16Schedule({ 
   schedule, 
-  initialROU, 
-  initialLiability, 
-  currency = 'USD' 
+  currency = 'USD',
+  onExport
 }: IFRS16ScheduleProps) {
-  const formatCurrency = (amount: number) => {
+  // Get created lease ID from Redux store
+  const { createdLeaseId } = useAppSelector((state) => state.newLease);
+  const hasLeaseId = !!createdLeaseId || !!schedule?.lease_id;
+
+  const formatCurrency = (amount: number | string | undefined) => {
+    if (!amount) return '$0.00';
+    const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-    }).format(amount);
+    }).format(numAmount);
   };
 
-  const getTotalInterest = () => {
-    return schedule.reduce((sum, item) => sum + item.interestExpense, 0);
-  };
+  const entries: IFRS16ScheduleEntry[] = schedule?.schedule_data?.entries || [];
 
-  const getTotalDepreciation = () => {
-    return schedule.reduce((sum, item) => sum + item.depreciationExpense, 0);
-  };
-
-  const getTotalExpense = () => {
-    return schedule.reduce((sum, item) => sum + item.totalExpense, 0);
-  };
+  const getTotalInterest = () => parseFloat(schedule?.total_interest || '0');
+  const getTotalDepreciation = () => parseFloat(schedule?.total_depreciation || '0');
+  const getTotalExpense = () => entries.reduce((sum, item) => sum + item.total_expense, 0);
 
   return (
     <div className="space-y-6">
@@ -56,18 +84,21 @@ export function IFRS16Schedule({
               <CardTitle>IFRS 16 Lease Schedule</CardTitle>
               <CardDescription>International Financial Reporting Standards lease accounting</CardDescription>
             </div>
-            <Badge>IFRS 16</Badge>
+            <div className="flex items-center gap-2">
+             
+              <Badge>IFRS 16</Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-sm text-muted-foreground">Initial ROU Asset</p>
-              <p className="text-lg">{formatCurrency(initialROU)}</p>
+              <p className="text-lg">{formatCurrency(schedule?.initial_rou_asset)}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Initial Lease Liability</p>
-              <p className="text-lg">{formatCurrency(initialLiability)}</p>
+              <p className="text-lg">{formatCurrency(schedule?.initial_lease_liability)}</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Interest</p>
@@ -93,13 +124,24 @@ export function IFRS16Schedule({
       </Card>
 
       {/* Schedule Tabs */}
+      
       <Tabs defaultValue="expense">
-        <TabsList>
-          <TabsTrigger value="expense">P&L Impact</TabsTrigger>
-          <TabsTrigger value="liability">Lease Liability</TabsTrigger>
-          <TabsTrigger value="asset">ROU Asset</TabsTrigger>
-          <TabsTrigger value="balances">Balance Sheet</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="expense">P&L Impact</TabsTrigger>
+            <TabsTrigger value="liability">Lease Liability</TabsTrigger>
+            <TabsTrigger value="asset">ROU Asset</TabsTrigger>
+            <TabsTrigger value="balances">Balance Sheet</TabsTrigger>
+          </TabsList>
+          <Button
+            onClick={onExport}
+            disabled={!hasLeaseId}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </div> 
 
         <TabsContent value="expense" className="space-y-4">
           <Card>
@@ -124,16 +166,16 @@ export function IFRS16Schedule({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {schedule.map((item) => {
-                      const nonCashExpense = item.totalExpense - item.leasePayment;
+                    {entries.map((entry) => {
+                      const nonCashExpense = entry.total_expense - entry.lease_payment;
                       return (
-                        <TableRow key={item.period}>
-                          <TableCell>{item.period}</TableCell>
-                          <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.interestExpense)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.depreciationExpense)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.totalExpense)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.leasePayment)}</TableCell>
+                        <TableRow key={entry.period}>
+                          <TableCell>{entry.period}</TableCell>
+                          <TableCell>{new Date(entry.period_date).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.interest_expense)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.amortization)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.total_expense)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.lease_payment)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(nonCashExpense)}</TableCell>
                         </TableRow>
                       );
@@ -182,21 +224,17 @@ export function IFRS16Schedule({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {schedule.map((item, index) => {
-                      const openingBalance = index === 0 ? initialLiability : schedule[index - 1].leaseLiabilityBalance;
-                      const principalReduction = item.leasePayment - item.interestExpense;
-                      return (
-                        <TableRow key={item.period}>
-                          <TableCell>{item.period}</TableCell>
-                          <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(openingBalance)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.interestExpense)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.leasePayment)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(principalReduction)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.leaseLiabilityBalance)}</TableCell>
-                        </TableRow>
-                      );
-                    })}
+                    {entries.map((entry) => (
+                      <TableRow key={entry.period}>
+                        <TableCell>{entry.period}</TableCell>
+                        <TableCell>{new Date(entry.period_date).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.lease_liability_beginning)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.interest_expense)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.lease_payment)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.principal_reduction)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.lease_liability_ending)}</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -227,18 +265,18 @@ export function IFRS16Schedule({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {schedule.map((item, index) => {
-                      const openingBalance = index === 0 ? initialROU : schedule[index - 1].rouAssetBalance;
-                      const accumulatedDepreciation = initialROU - item.rouAssetBalance;
-                      const percentDepreciated = (accumulatedDepreciation / initialROU) * 100;
+                    {entries.map((entry) => {
+                      const initialROU = parseFloat(schedule?.initial_rou_asset || '0');
+                      const accumulatedDepreciation = initialROU - entry.rou_asset_ending;
+                      const percentDepreciated = initialROU > 0 ? (accumulatedDepreciation / initialROU) * 100 : 0;
                       return (
-                        <TableRow key={item.period}>
-                          <TableCell>{item.period}</TableCell>
-                          <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(openingBalance)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.depreciationExpense)}</TableCell>
+                        <TableRow key={entry.period}>
+                          <TableCell>{entry.period}</TableCell>
+                          <TableCell>{new Date(entry.period_date).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.rou_asset_beginning)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.amortization)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(accumulatedDepreciation)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.rouAssetBalance)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.rou_asset_ending)}</TableCell>
                           <TableCell className="text-right">{percentDepreciated.toFixed(1)}%</TableCell>
                         </TableRow>
                       );
@@ -273,21 +311,21 @@ export function IFRS16Schedule({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {schedule.map((item, index) => {
-                      const remainingPeriods = schedule.length - index;
-                      const currentLiability = remainingPeriods <= 12 ? item.leaseLiabilityBalance : 
-                        (item.leaseLiabilityBalance - (schedule[index + Math.min(12, remainingPeriods - 1)]?.leaseLiabilityBalance || 0));
-                      const nonCurrentLiability = item.leaseLiabilityBalance - currentLiability;
-                      const netPosition = item.rouAssetBalance - item.leaseLiabilityBalance;
+                    {entries.map((entry, index) => {
+                      const remainingPeriods = entries.length - index;
+                      const currentLiability = remainingPeriods <= 12 ? entry.lease_liability_ending : 
+                        (entry.lease_liability_ending - (entries[index + Math.min(12, remainingPeriods - 1)]?.lease_liability_ending || 0));
+                      const nonCurrentLiability = entry.lease_liability_ending - currentLiability;
+                      const netPosition = entry.rou_asset_ending - entry.lease_liability_ending;
                       
                       return (
-                        <TableRow key={item.period}>
-                          <TableCell>{item.period}</TableCell>
-                          <TableCell>{new Date(item.date).toLocaleDateString()}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.rouAssetBalance)}</TableCell>
+                        <TableRow key={entry.period}>
+                          <TableCell>{entry.period}</TableCell>
+                          <TableCell>{new Date(entry.period_date).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.rou_asset_ending)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(currentLiability)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(nonCurrentLiability)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.leaseLiabilityBalance)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.lease_liability_ending)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(netPosition)}</TableCell>
                         </TableRow>
                       );

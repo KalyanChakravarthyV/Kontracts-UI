@@ -2,6 +2,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/lease-dashboard/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/lease-dashboard/ui/tabs';
 import { Badge } from '@/components/lease-dashboard/ui/badge';
+import { Button } from '@/components/lease-dashboard/ui/button';
+import { Download } from 'lucide-react';
+import { useAppSelector } from '@/store/hooks';
 
 export interface ASC842ScheduleEntry {
   period: number;
@@ -34,13 +37,19 @@ interface ASC842ScheduleProps {
   schedule: ASC842ScheduleData;
   classification: 'operating' | 'finance';
   currency?: string;
+  onExport?: () => void;
 }
 
 export function ASC842Schedule({ 
   schedule, 
   classification, 
-  currency = 'USD' 
+  currency = 'USD',
+  onExport
 }: ASC842ScheduleProps) {
+  // Get created lease ID from Redux store
+  const { createdLeaseId } = useAppSelector((state) => state.newLease);
+  const hasLeaseId = !!createdLeaseId || !!schedule?.lease_id;
+
   const formatCurrency = (amount: number | string | undefined) => {
     if (!amount) return '$0.00';
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -64,11 +73,14 @@ export function ASC842Schedule({
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>ASC 842 Lease Schedule</CardTitle>
-              <CardDescription>US GAAP lease accounting calculations</CardDescription>
+              <CardDescription>US GAAP lease accounting standard</CardDescription>
             </div>
-            <Badge variant={classification === 'finance' ? 'default' : 'secondary'}>
-              {classification === 'finance' ? 'Finance Lease' : 'Operating Lease'}
-            </Badge>
+            <div className="flex items-center gap-2">
+             
+              <Badge variant={classification === 'finance' ? 'default' : 'secondary'}>
+                {classification === 'finance' ? 'Finance Lease' : 'Operating Lease'}
+              </Badge>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -95,11 +107,21 @@ export function ASC842Schedule({
 
       {/* Schedule Tabs */}
       <Tabs defaultValue={classification === 'finance' ? 'finance' : 'operating'}>
-        <TabsList>
-          <TabsTrigger value="finance">Finance Lease View</TabsTrigger>
-          <TabsTrigger value="operating">Operating Lease View</TabsTrigger>
-          <TabsTrigger value="balances">Balance Sheet Impact</TabsTrigger>
-        </TabsList>
+        <div className="flex items-center justify-between mb-4">
+          <TabsList>
+            <TabsTrigger value="finance">Finance Lease View</TabsTrigger>
+            <TabsTrigger value="operating">Operating Lease View</TabsTrigger>
+            <TabsTrigger value="balances">Balance Sheet Impact</TabsTrigger>
+          </TabsList>
+          <Button
+            onClick={onExport}
+            disabled={!hasLeaseId}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        </div>
 
         <TabsContent value="finance" className="space-y-4">
           <Card>

@@ -9,6 +9,8 @@ import LeaseDetails from '@/components/LeaseDetails'
 import LeaseModal from '@/components/LeaseModal'
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setExistingLease, clearExistingLease } from '@/store/slices/existingLeaseSlice';
+import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageSlice';
+import { AlertMessage } from '@/components/common/AlertMessage';
 import { API_BASE_URL } from '@/config/api';
 
 import {
@@ -61,6 +63,9 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const dispatch = useAppDispatch()
   const { getAccessTokenSilently } = useAuth0();
   
+  // Get createdLeaseId from Redux store
+  const { createdLeaseId } = useAppSelector((state) => state.newLease);
+  
   const getLeasesApi = async () => {
     try {
       const token = await getAccessTokenSilently();
@@ -83,6 +88,13 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const { data: contracts, isLoading: contractsLoading } = useQuery({
     queryKey: ['/api/contracts'],
     queryFn: getLeasesApi});
+  
+  // Refetch contracts when a new lease is created
+  useEffect(() => {
+    if (createdLeaseId) {
+      queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
+    }
+  }, [createdLeaseId, queryClient]);
   
 
   type FieldType = "text" | "select";
@@ -562,10 +574,16 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       if (!selectedContractForSchedule) return;
 
       try {
-        const response = await apiRequest(
-          'POST',
-          `/api/contracts/${selectedContractForSchedule}/compliance/ASC842`,
-          scheduleParams
+        const accessToken = await getAccessTokenSilently();
+        const response = await axios.post(
+          `${API_BASE_URL}/schedules/asc842/${selectedContractForSchedule}`,
+          scheduleParams,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
         );
         console.log('ASC 842 Response:', response); // Debug log
         setGeneratedSchedule(response.data);
@@ -576,14 +594,19 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
         queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
         queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
 
+        // Dispatch success message
+        dispatch(setSuccessMessage(`Generated ASC842 schedule for lease ${selectedContractForSchedule}`));
+
         toast({
           title: 'ASC 842 Schedule Generated',
-          description: `The schedule has been created with ${response.paymentsCreated || 0} payment records.`,
+          description: `The schedule has been created with ${response.data.paymentsCreated || 0} payment records.`,
         });
       } catch (error: any) {
+        const errorMessage = error.response?.data?.detail || error.message || 'Failed to generate ASC 842 schedule';
+        dispatch(setErrorMessage(errorMessage));
         toast({
           title: 'Failed to generate schedule',
-          description: error.message,
+          description: errorMessage,
           variant: 'destructive',
         });
       }
@@ -617,7 +640,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                   <option value=''>Choose a contract...</option>
                   {contracts?.map((contract: any) => (
                     <option key={contract.id} value={contract.id}>
-                      {contract.name} - {contract.vendor}
+                      {contract.lease_name || contract.name}
                     </option>
                   ))}
                 </select>
@@ -1067,20 +1090,37 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
     const complianceScheduleMutation = useMutation({
       mutationFn: async ({ contractId, params }: any) => {
-        return await apiRequest('POST', `/api/contracts/${contractId}/compliance/IFRS16`, params);
+        const accessToken = await getAccessTokenSilently();
+        const response = await axios.post(
+          `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
+          params,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        return response.data;
       },
       onSuccess: (data: any) => {
         setGeneratedSchedule(data.schedule || []);
+        
+        // Dispatch success message
+        dispatch(setSuccessMessage(`Generated IFRS16 schedule for lease ${selectedContractForSchedule}`));
+        
         toast({
           title: 'IFRS 16 Schedule Generated',
           description: `The schedule has been created with ${data.paymentsCreated || 0} payment records.`,
         });
         queryClient.invalidateQueries({ queryKey: ['/api/compliance-schedules'] });
       },
-      onError: (error: Error) => {
+      onError: (error: any) => {
+        const errorMessage = error.response?.data?.detail || error.message || 'Failed to generate IFRS 16 schedule';
+        dispatch(setErrorMessage(errorMessage));
         toast({
           title: 'Error',
-          description: error.message || 'Failed to generate IFRS 16 schedule',
+          description: errorMessage,
           variant: 'destructive',
         });
       },
@@ -1116,7 +1156,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                 <SelectContent>
                   {contracts?.map((contract: any) => (
                     <SelectItem key={contract.id} value={contract.id}>
-                      {contract.name} - {contract.vendor}
+                      {contract.lease_name || contract.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1956,12 +1996,16 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     if (leaseId) {
       setSelectedLeaseId(leaseId)
       fetchExistingLeaseDetails(leaseId)
+    } else {
+      setSelectedLeaseId("")
     }
     setOpenLeaseModal(true)
   }
   console.log("Selected lease id", selectedLeaseId)
   return (
-    <div className='mt-8 bg-card rounded-lg border border-border shadow-sm'>
+    <>
+      <AlertMessage />
+      <div className='mt-8 bg-card rounded-lg border border-border shadow-sm'>
       <div className='p-6 border-b border-border'>
         <div className='flex items-center justify-between'>
           <div>
@@ -2257,5 +2301,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
         )}
       </div>
     </div>
+    </>
   );
 }
