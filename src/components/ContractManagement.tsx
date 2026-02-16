@@ -3,6 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
+import axios from "axios";
+import { useAuth0 } from '@auth0/auth0-react';
+import LeaseDetails from '@/components/LeaseDetails'
+import LeaseModal from '@/components/LeaseModal'
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { setExistingLease, clearExistingLease } from '@/store/slices/existingLeaseSlice';
+import { API_BASE_URL } from '@/config/api';
+
 import {
   Select,
   SelectContent,
@@ -27,6 +35,11 @@ interface ContractManagementProps {
 export function ContractManagement({ initialTab = 'contracts' }: ContractManagementProps = {}) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
+  const [createLeaseValues, setCreateLeaseValues] = useState<Record<string, any>>({})
+  const [showCreateLeaseForm, setShowCreateLeaseForm] = useState<boolean>(false);
+  const [openLeaseModal, setOpenLeaseModal] = useState(false);
+  const [selectedLeaseId, setSelectedLeaseId] = useState<string>('');
+
   const [selectedContractForSchedule, setSelectedContractForSchedule] = useState<string>('');
   const [scheduleParams, setScheduleParams] = useState({
     // ASC 842 properties
@@ -43,9 +56,36 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+
+
+  const dispatch = useAppDispatch()
+  const { getAccessTokenSilently } = useAuth0();
+  
+  const getLeasesApi = async () => {
+    try {
+      const token = await getAccessTokenSilently();
+      const response = await fetch(`${API_BASE_URL}/leases/`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      return data;
+
+    } catch (error) {
+      console.error('API call failed:', error);
+    }
+    return []
+  };
+
+
   const { data: contracts, isLoading: contractsLoading } = useQuery({
     queryKey: ['/api/contracts'],
-  });
+    queryFn: getLeasesApi});
+  
+
+  type FieldType = "text" | "select";
 
   const complianceScheduleMutation = useMutation({
     mutationFn: async ({
@@ -240,10 +280,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       payments?.map((payment: any) => {
         const contract = contracts?.find((c: any) => c.id === payment.contractId);
         return {
-          ...payment,
-          contractName: contract?.name || 'Unknown Contract',
-          vendor: contract?.vendor || 'Unknown Vendor',
-          dueDate: new Date(payment.dueDate),
+          // ...payment,
+          contractName: contract?.lease_name || 'Unknown Contract',
+          vendor: contract?.lessor_name || 'Unknown Vendor',
+          dueDate: new Date(contract?.end_date),
         };
       }) || [];
 
@@ -514,7 +554,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     const [selectedScheduleDetails, setSelectedScheduleDetails] = useState<any>(null);
     const [selectedScheduleId, setSelectedScheduleId] = useState<string | null>(null);
     const [showScheduleDetails, setShowScheduleDetails] = useState<boolean>(false);
-
     const { data: complianceSchedules } = useQuery({
       queryKey: ['/api/compliance-schedules'],
     });
@@ -1563,7 +1602,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       { value: '1', label: 'First Period (1)' },
       { value: 'last', label: 'Last Period' },
     ];
-
+    
     return (
       <div className='space-y-6'>
         <div className='flex items-center justify-between'>
@@ -1890,7 +1929,37 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       </div>
     );
   }
-
+  const fetchExistingLeaseDetails = async(contractId: string)=>{
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+       `${API_BASE_URL}/leases/${contractId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response && response?.data) {
+        dispatch(setExistingLease(response?.data));
+      }
+      
+      console.log("fetched existingLease data successfully", response.data);
+    } catch (error) {
+      console.error("Error creating lease", error);
+    }
+  }
+  const handleDisplayCreateLeaseform = (leaseId?: string)=>{
+    console.log("clicked", leaseId)
+    dispatch(clearExistingLease());
+    if (leaseId) {
+      setSelectedLeaseId(leaseId)
+      fetchExistingLeaseDetails(leaseId)
+    }
+    setOpenLeaseModal(true)
+  }
+  console.log("Selected lease id", selectedLeaseId)
   return (
     <div className='mt-8 bg-card rounded-lg border border-border shadow-sm'>
       <div className='p-6 border-b border-border'>
@@ -1954,6 +2023,32 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                 ))}
               </div>
             ) : (
+              <div>
+              <div className='flex items-center justify-end'>
+                
+                  <button
+                    onClick={() => handleDisplayCreateLeaseform()}
+                    className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
+                    data-testid='button-new-asc842-schedule'
+                  >
+                    <i className='fas fa-plus mr-2'></i>Create Lease 
+                  </button>
+                </div>
+                {openLeaseModal ? <>
+                
+                  
+                  {/* Lease Details Dialog */}
+   <LeaseModal
+  open={openLeaseModal}
+  onOpenChange={setOpenLeaseModal}
+>
+  <LeaseDetails contractId = {selectedLeaseId} onClose={() => setOpenLeaseModal(false)} />
+</LeaseModal>
+
+
+
+                 
+                </>:''}
               <table className='w-full text-sm'>
                 <thead>
                   <tr className='border-b border-border'>
@@ -1986,31 +2081,31 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                         className='border-b border-border hover:bg-muted/50 transition-colors'
                         data-testid={`contract-row-${contract.id}`}
                       >
-                        <td className='py-4 px-4'>
+                        <td className='py-4 px-4 cursor-pointer' onClick={()=> handleDisplayCreateLeaseform(contract.id)}>
                           <div>
                             <p
                               className='font-medium'
                               data-testid={`text-contract-name-${contract.id}`}
                             >
-                              {contract.name}
+                              {contract.lease_name}
                             </p>
                             <p
                               className='text-xs text-muted-foreground'
                               data-testid={`text-vendor-${contract.id}`}
                             >
-                              {contract.vendor}
+                              {contract.lessor_name}
                             </p>
                           </div>
                         </td>
                         <td className='py-4 px-4'>
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contract.type)}`}
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contract.classification)}`}
                             data-testid={`badge-type-${contract.id}`}
                           >
                             {contract.type}
                           </span>
                         </td>
-                        <td
+                        {/* <td
                           className='py-4 px-4 text-muted-foreground'
                           data-testid={`text-payment-terms-${contract.id}`}
                         >
@@ -2027,7 +2122,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                           data-testid={`text-amount-${contract.id}`}
                         >
                           ${parseFloat(contract.amount).toLocaleString()}
-                        </td>
+                        </td> */}
                         <td className='py-4 px-4'>
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(contract.status)}`}
@@ -2085,6 +2180,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                   )}
                 </tbody>
               </table>
+              </div>
             )}
 
             {/* Pagination */}
