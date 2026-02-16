@@ -1,9 +1,13 @@
 import { configureStore } from '@reduxjs/toolkit';
 import existingLeaseReducer from './slices/existingLeaseSlice';
+import newLeaseReducer from './slices/newLeaseSlice';
+import alertMessageReducer from './slices/alertMessageSlice';
 
 export const store = configureStore({
   reducer: {
-    existingLease: existingLeaseReducer
+    existingLease: existingLeaseReducer,
+    newLease: newLeaseReducer,
+    alertMessage: alertMessageReducer,
   },
 });
 

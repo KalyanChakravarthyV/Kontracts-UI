@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import Alert from '@mui/material/Alert';
 
 export type AppAlertProps = {
@@ -11,6 +12,17 @@ const AppAlert = ({
   severity = 'info',
   onClose,
 }: AppAlertProps) => {
+  // Auto-dismiss after 3 seconds
+  useEffect(() => {
+    if (message && onClose) {
+      const timer = setTimeout(() => {
+        onClose();
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [message, onClose]);
+
   if (!message) return null;
 
   return (

@@ -20,12 +20,10 @@ import { Button } from "@/components/lease-dashboard/ui/button";
 import { Checkbox } from "@/components/lease-dashboard/ui/checkbox";
 import { createLeaseFormFields } from "@/Utils/createLeaseFormFields";
 import type { FieldConfig } from "@/Utils/createLeaseFormFields";
+import type { LeaseFormData, LeaseData } from "@/types/lease";
 
-export interface LeaseFormData {
-  [key: string]: string | boolean | number | null;
-}
 interface LeaseFormProps {
-  existingLease?: LeaseFormData | null;
+  existingLease?: LeaseFormData | LeaseData | null;
   onSubmit?: (data: LeaseFormData) => void;
 }
 
@@ -67,7 +65,6 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
     }
   }, [existingLease]);
 
-  console.log("existing lease data in form", existingLease);
 const isFormValid = React.useMemo(() => {
   return createLeaseFormFields.every((section) =>
     section.fields.every((field) => {
@@ -87,8 +84,16 @@ const handleChange = (field: string, value: any) => {
   };
 
   const renderField = (field: FieldConfig) => {
+    const fieldValue = formData[field.id];
+    
+    // For text inputs, ensure we only pass string/number values
+    const getInputValue = () => {
+      if (typeof fieldValue === 'boolean') return '';
+      return fieldValue?.toString() || '';
+    };
+
     const commonProps = {
-      value: formData[field.id] || "",
+      value: getInputValue(),
       onChange: (e: any) => handleChange(field.id, e.target.value),
     };
 

@@ -6,13 +6,15 @@ import { PaymentSchedule } from '@/components/lease-dashboard/PaymentSchedule';
 import type { PaymentScheduleItem } from '@/components/lease-dashboard/PaymentSchedule';
 import { ASC842Schedule } from '@/components/lease-dashboard/ASC842Schedule';
 import { IFRS16Schedule } from '@/components/lease-dashboard/IFRS16Schedule';
-import type { IFRS16ScheduleItem } from '@/components/lease-dashboard/IFRS16Schedule';
 import { JournalEntries } from '@/components/lease-dashboard/JournalEntries';
 import type { JournalEntry } from '@/components/lease-dashboard/JournalEntries';
+import { AlertMessage } from '@/components/common/AlertMessage';
 import { FileText, DollarSign, BookOpen, Receipt } from 'lucide-react';
 import axios from "axios";
 import { useAuth0 } from '@auth0/auth0-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { setCreatedLeaseId } from '@/store/slices/newLeaseSlice';
+import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageSlice';
 import { API_BASE_URL } from '@/config/api';
 
 type LeaseDetailsProps = {
@@ -24,18 +26,20 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const { leaseData } = useAppSelector(
     (state) => state.existingLease
   );
+  const { createdLeaseId } = useAppSelector(
+    (state) => state.newLease
+  );
   console.log("lease data", leaseData)
   console.log("existing lease", leaseData)
   const [activeTab, setActiveTab] = useState('form');
   const [paymentScheduleData, setPaymentScheduleData] = useState([])
   const [asc842ScheduleData, setASC842ScheduleData] = useState<any>(null)
+  const [ifrs16ScheduleData, setIFRS16ScheduleData] = useState<any>(null)
 
   // Sample Payment Schedule Data
   const samplePayments: PaymentScheduleItem[] = generateSamplePayments();
 
 
-  // Sample IFRS 16 Schedule Data
-  const sampleIFRS16: IFRS16ScheduleItem[] = generateSampleIFRS16();
 
   // Sample Journal Entries
   const sampleJournalEntries: JournalEntry[] = generateSampleJournalEntries();
@@ -43,6 +47,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     if (contractId) {
       fetchPayments()
       fetchASC842Schedule()
+      fetchIFRS16Schedule()
     }
 
   }, [contractId])
@@ -98,11 +103,120 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       console.error("Error fetching asc842 schedule", error);
     }
   }
-  
+  const fetchIFRS16Schedule = async () => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+        `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
+        {
+          params: {
+           format: "json"
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (response?.data) {
+          setIFRS16ScheduleData(response.data)
+      }
+      
+      console.log("fetched ifrs16 schedule successfully", response.data);
+    } catch (error) {
+      console.error("Error fetching ifrs16 schedule", error);
+    }
+  }
   const { getAccessTokenSilently } = useAuth0();
+  
+  const exportASC842Schedule = async () => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+        `${API_BASE_URL}/schedules/asc842/${contractId}`,
+        {
+          params: {
+           format: "excel"
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          responseType: 'blob'
+        }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `ASC842_Schedule_${contractId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      console.log("exported asc842 schedule successfully");
+      // Dispatch success message
+      dispatch(setSuccessMessage('ASC842 schedule exported successfully!'));
+    } catch (error) {
+      console.error("Error exporting asc842 schedule", error);
+      // Dispatch error message
+      dispatch(setErrorMessage('Failed to export ASC842 schedule. Please try again.'));
+    }
+  }
+
+  const exportIFRS16Schedule = async () => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(
+        `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
+        {
+          params: {
+           format: "excel"
+          },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          responseType: 'blob'
+        }
+      );
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `IFRS16_Schedule_${contractId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      console.log("exported ifrs16 schedule successfully");
+      // Dispatch success message
+      dispatch(setSuccessMessage('IFRS16 schedule exported successfully!'));
+    } catch (error) {
+      console.error("Error exporting ifrs16 schedule", error);
+      // Dispatch error message
+      dispatch(setErrorMessage('Failed to export IFRS16 schedule. Please try again.'));
+    }
+  }
+  
   const handleAddPayment = (data: any)=>{
     console.log("data", data)
   }
+
+  const transformLeasePayload = (values: any) => {
+    // Transform string values to numbers for numeric fields
+    return {
+      ...values,
+      initial_direct_costs: parseFloat(values.initial_direct_costs) || 0,
+      prepaid_rent: parseFloat(values.prepaid_rent) || 0,
+      lease_incentives: parseFloat(values.lease_incentives) || 0,
+      residual_value: parseFloat(values.residual_value) || 0,
+      incremental_borrowing_rate: parseFloat(values.incremental_borrowing_rate) || 0,
+      discount_rate: parseFloat(values.discount_rate) || 0,
+    };
+  };
 
   const handleSubmittedCreateLeaseFields = async (values: any) => {
     console.log("submitted create lease payload", values);
@@ -110,22 +224,86 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     try {
       const accessToken = await getAccessTokenSilently();
       console.log("accesstoken", accessToken)
-      await axios.post(`${API_BASE_URL}/leases/`, values,
+      
+      const transformedPayload = transformLeasePayload(values);
+      console.log("transformed payload", transformedPayload);
+      
+      const response = await axios.post(`${API_BASE_URL}/leases/`, transformedPayload,
         {
           headers: {
-            Authorization: `Bearer ${accessToken}`, // token from auth
+            Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
         }
       );
-      console.log("Lease created successfully");
+      console.log("Lease created successfully", response.data);
+      
+      // Dispatch the created lease ID to Redux store
+      if (response.data && response.data.id) {
+        dispatch(setCreatedLeaseId(response.data.id.toString()));
+        console.log("Created lease ID set:", response.data.id);
+      }
+      
+      // Dispatch success message
+      dispatch(setSuccessMessage("Lease created successfully!"));
     } catch (error) {
       console.error("Error creating lease", error);
+      // Dispatch error message
+      dispatch(setErrorMessage("Failed to create lease. Please try again."));
+    }
+  }
+
+  const handleUpdateLease = async (values: any) => {
+    console.log("submitted update lease payload", values);
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      console.log("accesstoken", accessToken)
+      
+      const transformedPayload = transformLeasePayload(values);
+      console.log("transformed payload for update", transformedPayload);
+      
+      // Use createdLeaseId (for newly created leases) or contractId (for existing leases)
+      const leaseIdToUpdate = createdLeaseId || contractId;
+      const response = await axios.put(`${API_BASE_URL}/leases/${leaseIdToUpdate}`, transformedPayload,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      console.log("Lease updated successfully", response.data);
+      
+      // Optionally update Redux store with updated lease data
+      if (response.data && response.data.id) {
+        console.log("Lease updated with ID:", response.data.id);
+      }
+      
+      // Dispatch success message
+      dispatch(setSuccessMessage("Lease updated successfully!"));
+    } catch (error) {
+      console.error("Error updating lease", error);
+      // Dispatch error message
+      dispatch(setErrorMessage("Failed to update lease. Please try again."));
+    }
+  }
+
+  const handleSubmitLeaseForm = async (values: any) => {
+    // Determine if this is a create or update operation
+    // Check for createdLeaseId (newly created), leaseData (existing from Redux), or contractId (existing from props)
+    if (createdLeaseId || leaseData || contractId) {
+      // Existing lease - use PUT method
+      await handleUpdateLease(values);
+    } else {
+      // New lease - use POST method
+      await handleSubmittedCreateLeaseFields(values);
     }
   }
 
   return (
     <div className="size-full overflow-auto bg-gray-50">
+      <AlertMessage />
       <div className="container mx-auto py-8 px-4">
         {/* Header */}
         <div className="mb-8">
@@ -169,7 +347,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <LeaseForm existingLease={leaseData} onSubmit={(data) => handleSubmittedCreateLeaseFields(data)} />
+                <LeaseForm existingLease={leaseData} onSubmit={(data) => handleSubmitLeaseForm(data)} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -183,15 +361,15 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
               schedule={asc842ScheduleData}
               classification="operating"
               currency="USD"
+              onExport={exportASC842Schedule}
             />
           </TabsContent>
 
           <TabsContent value="ifrs16">
             <IFRS16Schedule
-              schedule={sampleIFRS16}
-              initialROU={360000}
-              initialLiability={360000}
+              schedule={ifrs16ScheduleData}
               currency="USD"
+              onExport={exportIFRS16Schedule}
             />
           </TabsContent>
 
@@ -244,37 +422,6 @@ function generateSamplePayments(): PaymentScheduleItem[] {
 }
 
 
-// Helper function to generate sample IFRS 16 schedule
-function generateSampleIFRS16(): IFRS16ScheduleItem[] {
-  const schedule: IFRS16ScheduleItem[] = [];
-  const monthlyRent = 10000;
-  const discountRate = 0.05 / 12;
-  let rouAsset = 360000;
-  let liability = 360000;
-  const depreciationExpense = rouAsset / 36;
-
-  for (let i = 1; i <= 36; i++) {
-    const date = new Date(2024, i - 1, 1);
-    const interestExpense = liability * discountRate;
-    const principalReduction = monthlyRent - interestExpense;
-
-    liability = Math.max(0, liability - principalReduction);
-    rouAsset = Math.max(0, rouAsset - depreciationExpense);
-
-    schedule.push({
-      period: i,
-      date: date.toISOString().split('T')[0],
-      leasePayment: monthlyRent,
-      interestExpense,
-      depreciationExpense,
-      rouAssetBalance: rouAsset,
-      leaseLiabilityBalance: liability,
-      totalExpense: interestExpense + depreciationExpense,
-    });
-  }
-
-  return schedule;
-}
 
 // Helper function to generate sample journal entries
 function generateSampleJournalEntries(): JournalEntry[] {

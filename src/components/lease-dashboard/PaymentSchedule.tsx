@@ -8,6 +8,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import AppAlert from '@/components/common/AppAlert';
 import { API_BASE_URL } from '@/config/api';
+import { useAppSelector, useAppDispatch } from '@/store/hooks';
+import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageSlice';
 
 // API Response type
 export interface PaymentApiResponse {
@@ -58,6 +60,11 @@ export function PaymentSchedule({
   contractId,
   onPaymentAdded 
 }: PaymentScheduleProps) {
+
+  const dispatch = useAppDispatch();
+  // Get created lease ID from Redux store
+  const { createdLeaseId } = useAppSelector((state) => state.newLease);
+  const hasLeaseId = !!createdLeaseId || !!contractId;
 
   // State for adding new rows
   const [isAddingRow, setIsAddingRow] = useState(false);
@@ -200,6 +207,15 @@ const getStatusBadge = (status: string) => {
     try {
       setIsSaving(true);
 
+      // Determine which lease ID to use: createdLeaseId (new lease) or contractId (existing lease)
+      const leaseId = createdLeaseId || contractId?.toString();
+      
+      if (!leaseId) {
+        setAlertMessage('No lease ID available. Please create or select a lease first.');
+        setIsSaving(false);
+        return;
+      }
+
       // Validate required fields
      const requiredFields = {
         due_date: 'Due Date',
@@ -218,7 +234,7 @@ const getStatusBadge = (status: string) => {
 
       // Prepare payload for API
       const payload = {
-        contract_id: contractId.toString(),
+        contract_id: leaseId,
         amount: newRow.amount,
         due_date: new Date(newRow.due_date).toISOString(),
         status: newRow.status,
@@ -249,6 +265,10 @@ const getStatusBadge = (status: string) => {
       }
 
      setPayments(prev => [...prev, data]);
+      
+      // Dispatch success message
+      dispatch(setSuccessMessage('Payment added successfully!'));
+      
       // Reset form and close
       setIsAddingRow(false);
       setNewRow({
@@ -261,13 +281,11 @@ const getStatusBadge = (status: string) => {
         status: 'Scheduled',
         paid_date: ''
       });
-
-      // Show success message
-      alert('Payment added successfully!');
-
     } catch (error) {
       console.error('Error saving payment:', error);
       alert(`Failed to save payment: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Dispatch error message
+      dispatch(setErrorMessage('Failed to save payment. Please try again.'));
     } finally {
       setIsSaving(false);
     }
@@ -275,8 +293,11 @@ const getStatusBadge = (status: string) => {
 
   return (
     <>
-    <AppAlert message={alertMessage}
-          severity = 'error'/>
+    <AppAlert 
+      message={alertMessage}
+      severity='error'
+      onClose={() => setAlertMessage('')}
+    />
     <div className="space-y-6">
       
       {/* Summary Cards */}
@@ -326,7 +347,7 @@ const getStatusBadge = (status: string) => {
           </div>
           <Button 
             onClick={handleAddRow} 
-            disabled={isAddingRow}
+            disabled={isAddingRow || !hasLeaseId}
             size="sm"
           >
             <Plus className="size-4 mr-2" />
