@@ -33,6 +33,13 @@ Set the following environment variables for authentication:
 
 In Auth0, add `http://localhost:5472/auth/callback` and your deployed domain’s `/auth/callback` as allowed callback URLs, and `http://localhost:5472/auth` (plus deployed `/auth`) as allowed logout URLs.
 
+### PostHog Analytics
+
+Set the following environment variables to enable analytics:
+
+- `VITE_POSTHOG_KEY` – PostHog project API key
+- `VITE_POSTHOG_HOST` – optional, defaults to `https://app.posthog.com`
+
 ### Building for Production
 
 ```bash
