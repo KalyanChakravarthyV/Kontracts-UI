@@ -21,6 +21,8 @@ import { Checkbox } from "@/components/lease-dashboard/ui/checkbox";
 import { createLeaseFormFields } from "@/Utils/createLeaseFormFields";
 import type { FieldConfig } from "@/Utils/createLeaseFormFields";
 import type { LeaseFormData, LeaseData } from "@/types/lease";
+import { useAuth0 } from "@auth0/auth0-react";
+import { API_BASE_URL } from "@/config/api";
 
 interface LeaseFormProps {
   existingLease?: LeaseFormData | LeaseData | null;
@@ -58,12 +60,49 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   const [formData, setFormData] = useState<LeaseFormData>(
     getInitialLeaseFormData()
   );
+  const [currencies, setCurrencies] = useState<Array<{ code: string; name: string }>>([]);
+  const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
+  const { getAccessTokenSilently } = useAuth0();
 
+  // Fetch currencies from API first
   useEffect(() => {
-    if (existingLease) {
+    const fetchCurrencies = async () => {
+      try {
+        const token = await getAccessTokenSilently();
+        const response = await fetch(`${API_BASE_URL}/currencies/`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const data = await response.json();
+        // Filter only active currencies
+        const activeCurrencies = data.filter((curr: any) => curr.is_active);
+        setCurrencies(activeCurrencies);
+        setCurrenciesLoaded(true);
+      } catch (error) {
+        console.error("Failed to fetch currencies:", error);
+        // Set default currencies as fallback
+        setCurrencies([
+          { code: "USD", name: "US Dollar" },
+          { code: "EUR", name: "Euro" },
+          { code: "GBP", name: "British Pound" },
+          { code: "JPY", name: "Japanese Yen" },
+          { code: "AUD", name: "Australian Dollar" },
+          { code: "CAD", name: "Canadian Dollar" },
+        ]);
+        setCurrenciesLoaded(true);
+      }
+    };
+
+    fetchCurrencies();
+  }, [getAccessTokenSilently]);
+
+  // Only populate form data after currencies are loaded
+  useEffect(() => {
+    if (existingLease && currenciesLoaded) {
       setFormData((prev) => ({ ...prev, ...existingLease }));
     }
-  }, [existingLease]);
+  }, [existingLease, currenciesLoaded]);
 
 const isFormValid = React.useMemo(() => {
   return createLeaseFormFields.every((section) =>
@@ -104,15 +143,37 @@ const handleChange = (field: string, value: any) => {
         );
 
       case "select":
+        // Handle currency field separately with code/name structure
+        if (field.id === 'currency') {
+          return (
+            <Select
+              value={formData[field.id]?.toString() || ""}
+              onValueChange={(v) => handleChange(field.id, v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={`Select ${field.label}`} />
+              </SelectTrigger>
+              <SelectContent className="max-h-[300px] overflow-y-auto">
+                {currencies.map((currency) => (
+                  <SelectItem key={currency.code} value={currency.code}>
+                    {currency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          );
+        }
+        
+        // For other select fields, use static options
         return (
           <Select
-            value={formData[field.id] || ""}
+            value={formData[field.id]?.toString() || ""}
             onValueChange={(v) => handleChange(field.id, v)}
           >
             <SelectTrigger>
               <SelectValue placeholder={`Select ${field.label}`} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-[700px] overflow-y-auto">
               {field.options?.map((opt) => (
                 <SelectItem key={opt} value={opt}>
                   {opt}

@@ -162,7 +162,9 @@ export const createLeaseFormFields: SectionConfig[] = [
   // 7. Financial & Adjustments
   {
     section: "Financial & Adjustments",
+    description: "Payment terms, costs, and financial incentives",
     fields: [
+      { id: "currency", label: "Currency", type: "select", options: [] },
       { id: "payment_terms", label: "Payment Terms", type: "text" },
       {
         id: "initial_direct_costs",
@@ -181,6 +183,7 @@ export const createLeaseFormFields: SectionConfig[] = [
   // 8. Additional Notes
   {
     section: "Additional Notes",
+    description: "Any additional information or special terms",
     fields: [
       {
         id: "additional_notes",

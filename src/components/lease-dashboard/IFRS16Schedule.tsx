@@ -46,18 +46,22 @@ export interface IFRS16ScheduleItem {
 
 interface IFRS16ScheduleProps {
   schedule: IFRS16ScheduleData;
+  existingLease?: any;
   currency?: string;
   onExport?: () => void;
+  handleGenerateOrRegenerate?: (param: string) => void;
 }
 
 export function IFRS16Schedule({ 
   schedule, 
+  existingLease,
   currency = 'USD',
-  onExport
+  onExport,
+  handleGenerateOrRegenerate
 }: IFRS16ScheduleProps) {
   // Get created lease ID from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
-  const hasLeaseId = !!createdLeaseId || !!schedule?.lease_id;
+  const hasLeaseId = !!createdLeaseId || !!schedule?.id || !!existingLease?.id;;
 
   const formatCurrency = (amount: number | string | undefined) => {
     if (!amount) return '$0.00';
@@ -73,6 +77,13 @@ export function IFRS16Schedule({
   const getTotalInterest = () => parseFloat(schedule?.total_interest || '0');
   const getTotalDepreciation = () => parseFloat(schedule?.total_depreciation || '0');
   const getTotalExpense = () => entries.reduce((sum, item) => sum + item.total_expense, 0);
+ 
+  const getGenerateStateName = () => {
+    if (schedule && entries.length > 0) {
+      return 'Regenerate';
+    }
+    return 'Generate';
+  };
 
   return (
     <div className="space-y-6">
@@ -133,14 +144,29 @@ export function IFRS16Schedule({
             <TabsTrigger value="asset">ROU Asset</TabsTrigger>
             <TabsTrigger value="balances">Balance Sheet</TabsTrigger>
           </TabsList>
-          <Button
-            onClick={onExport}
-            disabled={!hasLeaseId}
-            className="gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Export
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleGenerateOrRegenerate?.(getGenerateStateName());
+              }}
+              disabled={!hasLeaseId}
+              className="gap-2"
+            >
+              {getGenerateStateName()}
+            </Button>
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onExport?.();
+              }}
+              disabled={!hasLeaseId || !(schedule && entries.length > 0)}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export
+            </Button>
+          </div>
         </div> 
 
         <TabsContent value="expense" className="space-y-4">
