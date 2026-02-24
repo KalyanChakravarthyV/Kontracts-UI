@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
-import { DollarSign, TrendingUp, Calendar, Plus, Save, X } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import AppAlert from '@/components/common/AppAlert';
@@ -24,6 +24,7 @@ export interface PaymentApiResponse {
 
 // Component Props type
 export interface PaymentScheduleItem {
+  id?: string;                       // payment ID for API calls
   period: number;                    // calculated
   due_date: string;                  // from due_date
   amount: number;
@@ -62,6 +63,8 @@ export function PaymentSchedule({
 }: PaymentScheduleProps) {
 
   const dispatch = useAppDispatch();
+  const { getAccessTokenSilently } = useAuth0();
+  
   // Get created lease ID from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
   const hasLeaseId = !!createdLeaseId || !!contractId;
@@ -73,6 +76,20 @@ export function PaymentSchedule({
   const [alertMessage, setAlertMessage] = useState('')
   const lastInputRef = useRef<HTMLInputElement | null>(null);
 
+  // State for inline editing
+  const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
+  const [editingRow, setEditingRow] = useState<PaymentScheduleItem | null>(null);
+
+  // State for payment summary
+  const [paymentSummary, setPaymentSummary] = useState<{
+    contract_id: string;
+    total_amount: number;
+    total_paid: number;
+    total_scheduled: number;
+    total_overdue: number;
+    payment_count: number;
+  } | null>(null);
+
   const [newRow, setNewRow] = useState<NewPaymentRow>({
     due_date: '',
     amount: '',
@@ -83,9 +100,35 @@ export function PaymentSchedule({
     status: 'Scheduled',
     paid_date: ''
   });
+  
   useEffect(()=>{
     setPayments(paymentsList)
   },[paymentsList])
+
+  // Fetch payment summary
+  useEffect(() => {
+    const getPaymentSummary = async () => {
+      if (!contractId) return;
+
+      try {
+        const accessToken = await getAccessTokenSilently();
+        const response = await fetch(`${API_BASE_URL}/payments/contract/${contractId}/summary`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setPaymentSummary(data);
+        }
+      } catch (error) {
+        console.error('Error fetching payment summary:', error);
+      }
+    };
+
+    getPaymentSummary();
+  }, [contractId, getAccessTokenSilently])
 
 useEffect(() => {
   if (isAddingRow && lastInputRef.current) {
@@ -98,7 +141,6 @@ useEffect(() => {
     }, 0);
   }
 }, [isAddingRow]);
-  const { getAccessTokenSilently } = useAuth0();
   const formatCurrency = (amount: number) => {
     if (!amount) return '-';
     return new Intl.NumberFormat('en-US', {
@@ -199,6 +241,85 @@ const getStatusBadge = (status: string) => {
       status: 'Scheduled',
       paid_date: ''
     });
+  };
+
+  // Start editing a row
+  const handleEditRow = (index: number) => {
+    const paymentToEdit = { ...payments[index] };
+    console.log('Editing payment:', paymentToEdit);
+    setEditingRowIndex(index);
+    setEditingRow(paymentToEdit);
+  };
+
+  // Handle editing input change
+  const handleEditInputChange = (field: keyof PaymentScheduleItem, value: string | number) => {
+    if (editingRow) {
+      setEditingRow({
+        ...editingRow,
+        [field]: value
+      });
+    }
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingRowIndex(null);
+    setEditingRow(null);
+  };
+
+  // Save edited payment (PUT API call)
+  const handleUpdatePayment = async (paymentId: string) => {
+    if (!editingRow) return;
+
+    try {
+      setIsSaving(true);
+      const accessToken = await getAccessTokenSilently();
+
+      if (!contractId) {
+        dispatch(setErrorMessage('No contract ID available'));
+        setIsSaving(false);
+        return;
+      }
+
+      const payload = {
+        contract_id: contractId.toString(),
+        due_date: editingRow.due_date,
+        amount: editingRow.amount.toString(),
+        type: editingRow.type,
+        principal: editingRow?.principal?.toString() || '',
+        interest: editingRow?.interest?.toString() || '',
+        liablity_balance: editingRow?.liablity_balance?.toString() || '',
+        status: editingRow.status === 'paid' ? 'Paid' : 'Scheduled',
+        paid_date: editingRow.paid_date || null
+      };
+
+      const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update payment');
+      }
+
+      // Update the payments list
+      setPayments(prev => prev.map((payment, idx) => 
+        idx === editingRowIndex ? editingRow : payment
+      ));
+
+      dispatch(setSuccessMessage('Payment updated successfully!'));
+      setEditingRowIndex(null);
+      setEditingRow(null);
+    } catch (error) {
+      console.error('Error updating payment:', error);
+      dispatch(setErrorMessage('Failed to update payment. Please try again.'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Save new payment (POST API call)
@@ -308,8 +429,8 @@ const getStatusBadge = (status: string) => {
             <DollarSign className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{formatCurrency(getTotalPayments())}</div>
-            <p className="text-xs text-muted-foreground">{payments.length} periods</p>
+            <div className="text-2xl">{formatCurrency(paymentSummary?.total_amount || getTotalPayments())}</div>
+            <p className="text-xs text-muted-foreground">{paymentSummary?.payment_count || payments.length} periods</p>
           </CardContent>
         </Card>
 
@@ -368,24 +489,158 @@ const getStatusBadge = (status: string) => {
                   <TableHead className="text-right">Liability Balance</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Paid Date</TableHead>
-                  {isAddingRow && <TableHead className="w-24">Actions</TableHead>}
+                  <TableHead className="w-24">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.map((payment, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{index + 1}</TableCell>
-                    <TableCell>{formatDate(payment.due_date)}</TableCell>
-                    <TableCell className="text-right">{payment.type}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.principal)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.interest)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(payment.liablity_balance)}</TableCell>
-                    <TableCell>{getStatusBadge(payment.status)}</TableCell>
-                    <TableCell>{formatDate(payment.paid_date)}</TableCell>
-                    {isAddingRow && <TableCell></TableCell>}
-                  </TableRow>
-                ))}
+                {payments.map((payment, index) => {
+                  const isEditing = editingRowIndex === index;
+                  const displayRow = isEditing && editingRow ? editingRow : payment;
+                  
+                  return (
+                    <TableRow key={index} className={isEditing ? 'bg-muted/50' : ''}>
+                      <TableCell>{index + 1}</TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            type="date"
+                            value={displayRow.due_date ? displayRow.due_date.split('T')[0] : ''}
+                            onChange={(e) => handleEditInputChange('due_date', e.target.value)}
+                            className="w-full"
+                          />
+                        ) : (
+                          formatDate(payment.due_date)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <select
+                            value={displayRow.type}
+                            onChange={(e) => handleEditInputChange('type', e.target.value)}
+                            className="w-full px-2 py-1 border rounded"
+                          >
+                            <option value="base_rent">Base rent</option>
+                            <option value="cam">CAM</option>
+                            <option value="insurance">Insurance</option>
+                            <option value="property-tax">Property tax</option>
+                          </select>
+                        ) : (
+                          payment.type
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            value={displayRow.amount}
+                            onChange={(e) => handleEditInputChange('amount', parseFloat(e.target.value))}
+                            className="w-full text-right"
+                            step="0.01"
+                          />
+                        ) : (
+                          formatCurrency(payment.amount)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            value={displayRow.principal}
+                            onChange={(e) => handleEditInputChange('principal', parseFloat(e.target.value))}
+                            className="w-full text-right"
+                            step="0.01"
+                          />
+                        ) : (
+                          formatCurrency(payment.principal)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            value={displayRow.interest}
+                            onChange={(e) => handleEditInputChange('interest', parseFloat(e.target.value))}
+                            className="w-full text-right"
+                            step="0.01"
+                          />
+                        ) : (
+                          formatCurrency(payment.interest)
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isEditing ? (
+                          <Input
+                            type="number"
+                            value={displayRow.liablity_balance}
+                            onChange={(e) => handleEditInputChange('liablity_balance', parseFloat(e.target.value))}
+                            className="w-full text-right"
+                            step="0.01"
+                          />
+                        ) : (
+                          formatCurrency(payment.liablity_balance)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <select
+                            value={displayRow.status}
+                            onChange={(e) => handleEditInputChange('status', e.target.value)}
+                            className="w-full px-2 py-1 border rounded"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="paid">Paid</option>
+                            <option value="upcoming">Upcoming</option>
+                          </select>
+                        ) : (
+                          getStatusBadge(payment.status)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <Input
+                            type="date"
+                            value={displayRow.paid_date || ''}
+                            onChange={(e) => handleEditInputChange('paid_date', e.target.value)}
+                            className="w-full"
+                            disabled={displayRow.status !== 'paid'}
+                          />
+                        ) : (
+                          formatDate(payment.paid_date)
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleUpdatePayment(payment.id || '')}
+                              disabled={isSaving || !payment.id}
+                            >
+                              <Check className="size-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={handleCancelEdit}
+                              disabled={isSaving}
+                            >
+                              <X className="size-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleEditRow(index)}
+                            disabled={isAddingRow || editingRowIndex !== null}
+                          >
+                            <Edit2 className="size-4" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 
                 {/* New Row Input Form */}
                 {isAddingRow && (

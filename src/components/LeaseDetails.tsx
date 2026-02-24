@@ -200,7 +200,141 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       dispatch(setErrorMessage('Failed to export IFRS16 schedule. Please try again.'));
     }
   }
-  
+  const generateASC842 = async () => {
+    if (!contractId) {
+      dispatch(setErrorMessage('No lease ID available'));
+      return;
+    }
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.post(
+        `${API_BASE_URL}/schedules/asc842/${contractId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response?.data) {
+        console.log('ASC842 schedule generated successfully:', response.data);
+        dispatch(setSuccessMessage('ASC842 schedule generated successfully!'));
+        
+        // Refetch the ASC842 schedule data
+        await fetchASC842Schedule();
+      }
+    } catch (error) {
+      console.error('Error generating ASC842 schedule:', error);
+      dispatch(setErrorMessage('Failed to generate ASC842 schedule. Please try again.'));
+    }
+  };
+
+  const deleteExistingASC842Schedule = async () => {
+    if (!contractId) {
+      dispatch(setErrorMessage('No lease ID available'));
+      return;
+    }
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      await axios.delete(
+        `${API_BASE_URL}/schedules/asc842/${contractId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      console.log('ASC842 schedule deleted successfully');
+      dispatch(setSuccessMessage('ASC842 schedule deleted successfully!'));
+      
+      // After successful deletion, regenerate the schedule
+      await generateASC842();
+    } catch (error) {
+      console.error('Error deleting ASC842 schedule:', error);
+      dispatch(setErrorMessage('Failed to delete ASC842 schedule. Please try again.'));
+    }
+  };
+
+  const handleGenerateOrRegenerateASC842 = async (param: string) => {
+    if (param === 'Generate') {
+      await generateASC842();
+    } else {
+      await deleteExistingASC842Schedule();
+    }
+  };
+
+  const generateIFRS16 = async () => {
+    if (!contractId) {
+      dispatch(setErrorMessage('No lease ID available'));
+      return;
+    }
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.post(
+        `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response?.data) {
+        console.log('IFRS16 schedule generated successfully:', response.data);
+        dispatch(setSuccessMessage('IFRS16 schedule generated successfully!'));
+        
+        // Refetch the IFRS16 schedule data
+        await fetchIFRS16Schedule();
+      }
+    } catch (error) {
+      console.error('Error generating IFRS16 schedule:', error);
+      dispatch(setErrorMessage('Failed to generate IFRS16 schedule. Please try again.'));
+    }
+  };
+
+  const deleteExistingIFRS16Schedule = async () => {
+    if (!contractId) {
+      dispatch(setErrorMessage('No lease ID available'));
+      return;
+    }
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      await axios.delete(
+        `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      console.log('IFRS16 schedule deleted successfully');
+      dispatch(setSuccessMessage('IFRS16 schedule deleted successfully!'));
+      
+      // After successful deletion, regenerate the schedule
+      await generateIFRS16();
+    } catch (error) {
+      console.error('Error deleting IFRS16 schedule:', error);
+      dispatch(setErrorMessage('Failed to delete IFRS16 schedule. Please try again.'));
+    }
+  };
+
+  const handleGenerateOrRegenerateIFRS16 = async (param: string) => {
+    if (param === 'Generate') {
+      await generateIFRS16();
+    } else {
+      await deleteExistingIFRS16Schedule();
+    }
+  };
   const handleAddPayment = (data: any)=>{
     console.log("data", data)
   }
@@ -359,8 +493,10 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           <TabsContent value="asc842">
             <ASC842Schedule
               schedule={asc842ScheduleData}
+              existingLease={leaseData}
               classification="operating"
               currency="USD"
+              handleGenerateOrRegenerate={handleGenerateOrRegenerateASC842}
               onExport={exportASC842Schedule}
             />
           </TabsContent>
@@ -368,7 +504,9 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           <TabsContent value="ifrs16">
             <IFRS16Schedule
               schedule={ifrs16ScheduleData}
+              existingLease={leaseData}
               currency="USD"
+              handleGenerateOrRegenerate={handleGenerateOrRegenerateIFRS16}
               onExport={exportIFRS16Schedule}
             />
           </TabsContent>
