@@ -14,6 +14,8 @@ export interface ASC842ScheduleEntry {
   principal_reduction: number;
   lease_liability_beginning: number;
   lease_liability_ending: number;
+  current_lease_liability?: number;
+  non_current_lease_liability?: number;
   rou_asset_beginning: number;
   amortization: number;
   rou_asset_ending: number;
@@ -173,6 +175,8 @@ export function ASC842Schedule({
                       <TableHead className="text-right">Principal Reduction</TableHead>
                       <TableHead className="text-right">Lease Liability (Beg)</TableHead>
                       <TableHead className="text-right">Lease Liability (End)</TableHead>
+                      <TableHead className="text-right">Current Liability</TableHead>
+                      <TableHead className="text-right">Non-Current Liability</TableHead>
                       <TableHead className="text-right">ROU Asset (Beg)</TableHead>
                       <TableHead className="text-right">ROU Amortization</TableHead>
                       <TableHead className="text-right">ROU Asset (End)</TableHead>
@@ -189,6 +193,8 @@ export function ASC842Schedule({
                         <TableCell className="text-right">{formatCurrency(entry.principal_reduction)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.lease_liability_beginning)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.lease_liability_ending)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.current_lease_liability)}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(entry.non_current_lease_liability)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.rou_asset_beginning)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.amortization)}</TableCell>
                         <TableCell className="text-right">{formatCurrency(entry.rou_asset_ending)}</TableCell>
@@ -222,6 +228,8 @@ export function ASC842Schedule({
                       <TableHead className="text-right">Principal Reduction</TableHead>
                       <TableHead className="text-right">Lease Liability (Beg)</TableHead>
                       <TableHead className="text-right">Lease Liability (End)</TableHead>
+                      <TableHead className="text-right">Current Liability</TableHead>
+                      <TableHead className="text-right">Non-Current Liability</TableHead>
                       <TableHead className="text-right">ROU Asset (Beg)</TableHead>
                       <TableHead className="text-right">ROU Amortization</TableHead>
                       <TableHead className="text-right">ROU Asset (End)</TableHead>
@@ -239,6 +247,8 @@ export function ASC842Schedule({
                           <TableCell className="text-right">{formatCurrency(entry.principal_reduction)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(entry.lease_liability_beginning)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(entry.lease_liability_ending)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.current_lease_liability)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.non_current_lease_liability)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(entry.rou_asset_beginning)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(entry.amortization)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(entry.rou_asset_ending)}</TableCell>
@@ -282,12 +292,8 @@ export function ASC842Schedule({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {entries.map((entry, index) => {
+                    {entries.map((entry) => {
                       const netPosition = entry.rou_asset_ending - entry.lease_liability_ending;
-                      const remainingPeriods = entries.length - index;
-                      const currentLiability = remainingPeriods <= 12 ? entry.lease_liability_ending : 
-                        (entries[index + Math.min(12, remainingPeriods - 1)]?.lease_liability_ending || 0);
-                      const nonCurrentLiability = entry.lease_liability_ending - currentLiability;
                       
                       return (
                         <TableRow key={entry.period}>
@@ -296,8 +302,8 @@ export function ASC842Schedule({
                           <TableCell className="text-right">{formatCurrency(entry.rou_asset_ending)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(entry.lease_liability_ending)}</TableCell>
                           <TableCell className="text-right">{formatCurrency(netPosition)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(currentLiability)}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(nonCurrentLiability)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.current_lease_liability)}</TableCell>
+                          <TableCell className="text-right">{formatCurrency(entry.non_current_lease_liability)}</TableCell>
                         </TableRow>
                       );
                     })}
