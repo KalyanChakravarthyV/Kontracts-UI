@@ -1,48 +1,37 @@
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuth0 } from "@auth0/auth0-react";
+import { useState } from "react";
 
 export default function AccountSettingsPage() {
   const queryClient = useQueryClient();
+  const { user, logout, isLoading } = useAuth0();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isLoggingOutAll, setIsLoggingOutAll] = useState(false);
 
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout");
-    },
-    onSuccess: () => {
+  const handleLogout = async (federated?: boolean) => {
+    try {
+      setIsLoggingOut(true);
       queryClient.clear();
-      window.location.href = "/auth";
-    },
-    onError: (error) => {
-      console.error("Logout failed:", error);
-      queryClient.clear();
-      window.location.href = "/auth";
+      await logout({
+        logoutParams: { returnTo: `${window.location.origin}/auth`, federated },
+      });
+    } finally {
+      setIsLoggingOut(false);
     }
-  });
-
-  const logoutAllMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/auth/logout-all");
-    },
-    onSuccess: () => {
-      queryClient.clear();
-      window.location.href = "/auth";
-    },
-    onError: (error) => {
-      console.error("Logout all failed:", error);
-      queryClient.clear();
-      window.location.href = "/auth";
-    }
-  });
-
-  const handleLogout = () => {
-    logoutMutation.mutate();
   };
 
-  const handleLogoutAll = () => {
-    if (confirm("This will log you out of all devices. Are you sure?")) {
-      logoutAllMutation.mutate();
+  const handleLogoutAll = async () => {
+    if (!confirm("This will log you out of Auth0. Continue?")) return;
+    try {
+      setIsLoggingOutAll(true);
+      queryClient.clear();
+      await logout({
+        logoutParams: { returnTo: `${window.location.origin}/auth`, federated: true },
+      });
+    } finally {
+      setIsLoggingOutAll(false);
     }
   };
 
@@ -66,15 +55,15 @@ export default function AccountSettingsPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Name</label>
-                    <p className="text-base">Jane Doe</p>
+                    <p className="text-base">{user?.name || "Jane Doe"}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Role</label>
-                    <p className="text-base">Contract Administrator</p>
+                    <p className="text-base">{user?.nickname || "Authenticated user"}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-muted-foreground">Email</label>
-                    <p className="text-base">jane.doe@example.com</p>
+                    <p className="text-base">{user?.email || "jane.doe@example.com"}</p>
                   </div>
                 </div>
               </div>
@@ -105,11 +94,11 @@ export default function AccountSettingsPage() {
                     <p className="text-sm text-muted-foreground mb-3">Manage your active sessions across devices</p>
                     <div className="flex gap-3">
                       <button
-                        onClick={handleLogout}
-                        disabled={logoutMutation.isPending}
+                        onClick={() => handleLogout()}
+                        disabled={isLoggingOut || isLoading}
                         className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
-                        {logoutMutation.isPending ? (
+                        {isLoggingOut ? (
                           <i className="fas fa-spinner fa-spin"></i>
                         ) : (
                           <i className="fas fa-sign-out-alt"></i>
@@ -118,10 +107,10 @@ export default function AccountSettingsPage() {
                       </button>
                       <button
                         onClick={handleLogoutAll}
-                        disabled={logoutAllMutation.isPending}
+                        disabled={isLoggingOutAll || isLoading}
                         className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/80 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                       >
-                        {logoutAllMutation.isPending ? (
+                        {isLoggingOutAll ? (
                           <i className="fas fa-spinner fa-spin"></i>
                         ) : (
                           <i className="fas fa-power-off"></i>

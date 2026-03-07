@@ -16,4 +16,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    port: Number(process.env.VITE_API_PORT) || 5472,
+  },
 })

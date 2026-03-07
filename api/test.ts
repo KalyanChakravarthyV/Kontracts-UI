@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { logger, logApiRequest } from './lib/logger';
+import { logger, logApiRequest } from './lib/logger.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   const startTime = Date.now();

@@ -1,38 +1,29 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth0 } from '@auth0/auth0-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
-import { apiRequest } from '@/lib/queryClient';
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [location] = useLocation();
   const queryClient = useQueryClient();
+  const { user, logout, isLoading } = useAuth0();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-  const { data: user } = useQuery({
-    queryKey: ['/api/user/profile'],
-  });
-
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest('POST', '/api/auth/logout');
-    },
-    onSuccess: () => {
-      // Clear all cached data
+  const handleLogout = async (federated?: boolean) => {
+    try {
+      setIsLoggingOut(true);
       queryClient.clear();
-      // Redirect to login page or refresh
-      window.location.href = '/auth';
-    },
-    onError: error => {
-      console.error('Logout failed:', error);
-      // Even if logout fails on server, clear local cache and redirect
-      queryClient.clear();
-      window.location.href = '/auth';
-    },
-  });
-
-  const handleLogout = () => {
-    logoutMutation.mutate();
+      await logout({
+        logoutParams: {
+          returnTo: `${window.location.origin}/auth`,
+          federated,
+        },
+      });
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -114,6 +105,19 @@ export function Sidebar() {
             </h3>
           )}
           <Link
+            href='/contracts'
+            className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
+              location === '/contracts'
+                ? 'bg-accent text-accent-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+            }`}
+            data-testid='link-contracts'
+            title={isCollapsed ? 'Contracts' : ''}
+          >
+            <i className='fas fa-file-signature w-5'></i>
+            {!isCollapsed && <span>Contracts</span>}
+          </Link>
+          <Link
             href='/document-manager'
             className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
               location === '/document-manager'
@@ -194,27 +198,27 @@ export function Sidebar() {
         <div className='flex items-center space-x-3'>
           <div className='bg-primary text-primary-foreground rounded-full w-10 h-10 flex items-center justify-center font-semibold'>
             <span data-testid='text-user-initials'>
-              {(user as any)?.name ? getInitials((user as any).name) : 'JD'}
+              {user?.name ? getInitials(user.name) : (user?.email ? getInitials(user.email) : 'KD')}
             </span>
           </div>
           {!isCollapsed && (
             <div className='flex-1 min-w-0'>
               <p className='text-sm font-medium truncate' data-testid='text-user-name'>
-                {(user as any)?.name || 'Jane Doe'}
+                {user?.name || user?.email || 'Kontracts User'}
               </p>
               <p className='text-xs text-muted-foreground truncate' data-testid='text-user-role'>
-                {(user as any)?.role || 'Contract Administrator'}
+                {user?.nickname || 'Authenticated'}
               </p>
             </div>
           )}
           <button
-            onClick={handleLogout}
-            disabled={logoutMutation.isPending}
+            onClick={() => handleLogout()}
+            disabled={isLoggingOut || isLoading}
             className='text-muted-foreground hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed'
             data-testid='button-logout'
             title={isCollapsed ? 'Logout' : ''}
           >
-            {logoutMutation.isPending ? (
+            {isLoggingOut ? (
               <i className='fas fa-spinner fa-spin'></i>
             ) : (
               <i className='fas fa-sign-out-alt'></i>

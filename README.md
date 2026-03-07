@@ -21,7 +21,24 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) to view it in the browser.
+Open [http://localhost:5472](http://localhost:5472) to view it in the browser.
+
+### Auth0 Configuration
+
+Set the following environment variables for authentication:
+
+- `VITE_AUTH0_DOMAIN` – your Auth0 tenant domain (e.g. `your-tenant.us.auth0.com`)
+- `VITE_AUTH0_CLIENT_ID` – SPA client ID
+- `VITE_AUTH0_AUDIENCE` – optional API audience if you need API tokens
+
+In Auth0, add `http://localhost:5472/auth/callback` and your deployed domain’s `/auth/callback` as allowed callback URLs, and `http://localhost:5472/auth` (plus deployed `/auth`) as allowed logout URLs.
+
+### PostHog Analytics
+
+Set the following environment variables to enable analytics:
+
+- `VITE_POSTHOG_KEY` – PostHog project API key
+- `VITE_POSTHOG_HOST` – optional, defaults to `https://app.posthog.com`
 
 ### Building for Production
 
