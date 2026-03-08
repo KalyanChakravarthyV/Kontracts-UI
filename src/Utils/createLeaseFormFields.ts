@@ -72,8 +72,10 @@ export const createLeaseFormFields: SectionConfig[] = [
         label: "Property Type",
         type: "select",
         options: ["office", "retail", "industrial", "warehouse", "residential"],
+        required: true
       },
       { id: "asset_class", label: "Asset Class", type: "text" },
+      { id: "property_tax", label: "Property Tax", type: "number" },
       {
         id: "asset_description",
         label: "Asset Description",
@@ -97,6 +99,7 @@ export const createLeaseFormFields: SectionConfig[] = [
         id: "lease_start_date",
         label: "Lease Start Date",
         type: "date",
+        required: true
       },
       {
         id: "end_date",
@@ -108,6 +111,7 @@ export const createLeaseFormFields: SectionConfig[] = [
         id: "rent_start_date",
         label: "Rent Start Date",
         type: "date",
+        required: true
       },
     ],
   },
@@ -164,7 +168,7 @@ export const createLeaseFormFields: SectionConfig[] = [
     section: "Financial & Adjustments",
     description: "Payment terms, costs, and financial incentives",
     fields: [
-      { id: "currency", label: "Currency", type: "select", options: [] },
+      { id: "currency", label: "Currency", type: "select", options: [], required: true },
       { id: "payment_terms", label: "Payment Terms", type: "text" },
       {
         id: "initial_direct_costs",

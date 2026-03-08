@@ -15,6 +15,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setCreatedLeaseId } from '@/store/slices/newLeaseSlice';
 import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageSlice';
+import { setExistingLease } from '@/store/slices/existingLeaseSlice';
 import { API_BASE_URL } from '@/config/api';
 
 type LeaseDetailsProps = {
@@ -51,6 +52,14 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
 
   }, [contractId])
+
+  // Refetch schedules when payment data changes
+  useEffect(() => {
+    if (contractId && paymentScheduleData && paymentScheduleData.length > 0) {
+      fetchASC842Schedule()
+      fetchIFRS16Schedule()
+    }
+  }, [paymentScheduleData])
   const fetchPayments = async () => {
     try {
       const accessToken = await getAccessTokenSilently();
@@ -387,6 +396,26 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
   }
 
+  const fetchLeaseData = async (leaseId: number) => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(`${API_BASE_URL}/leases/${leaseId}`, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+      
+      if (response.data) {
+        // Update Redux store with the latest lease data
+        dispatch(setExistingLease(response.data));
+        console.log("Lease data refreshed:", response.data);
+      }
+    } catch (error) {
+      console.error("Error fetching lease data:", error);
+    }
+  };
+
   const handleUpdateLease = async (values: any) => {
     console.log("submitted update lease payload", values);
 
@@ -409,9 +438,11 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       );
       console.log("Lease updated successfully", response.data);
       
-      // Optionally update Redux store with updated lease data
+      // Update Redux store with updated lease data
       if (response.data && response.data.id) {
         console.log("Lease updated with ID:", response.data.id);
+        // Fetch the latest lease data to ensure all fields are up to date
+        await fetchLeaseData(response.data.id);
       }
       
       // Dispatch success message
@@ -487,13 +518,20 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           </TabsContent>
 
           <TabsContent value="payments">
-            <PaymentSchedule contractId={contractId} paymentsList={paymentScheduleData} onPaymentAdded={handleAddPayment} currency="USD" />
+            <PaymentSchedule 
+              contractId={contractId} 
+              paymentsList={paymentScheduleData} 
+              onPaymentAdded={handleAddPayment} 
+              onPaymentChanged={fetchPayments}
+              currency="USD" 
+            />
           </TabsContent>
 
           <TabsContent value="asc842">
             <ASC842Schedule
               schedule={asc842ScheduleData}
               existingLease={leaseData}
+              paymentsList={paymentScheduleData} 
               classification="operating"
               currency="USD"
               handleGenerateOrRegenerate={handleGenerateOrRegenerateASC842}
@@ -505,6 +543,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
             <IFRS16Schedule
               schedule={ifrs16ScheduleData}
               existingLease={leaseData}
+              paymentsList={paymentScheduleData}
               currency="USD"
               handleGenerateOrRegenerate={handleGenerateOrRegenerateIFRS16}
               onExport={exportIFRS16Schedule}

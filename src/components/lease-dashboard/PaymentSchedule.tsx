@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
-import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import AppAlert from '@/components/common/AppAlert';
@@ -17,6 +17,7 @@ export interface PaymentApiResponse {
   contract_id: string;
   amount: string;
   due_date: string;
+  payment_type_id: string;
   status: 'Paid' | 'Scheduled';
   paid_date: string | null;
   created_at: string;
@@ -28,7 +29,7 @@ export interface PaymentScheduleItem {
   period: number;                    // calculated
   due_date: string;                  // from due_date
   amount: number;
-  type: string;                    // from amount (for now)             // from amount (for now)
+  payment_type_id: string;           // payment type id from API
   principal: number,
   interest: number,
   liablity_balance: number,    // calculated
@@ -40,7 +41,7 @@ export interface PaymentScheduleItem {
 export interface NewPaymentRow {
   due_date: string;
   amount: string;
-  type: string;
+  payment_type_id: string;
   principal: '',
   interest: '',
   liablity_balance: '',
@@ -53,13 +54,15 @@ interface PaymentScheduleProps {
   currency?: string;
   contractId: number;
   onPaymentAdded?: (newPayment: PaymentApiResponse) => void;
+  onPaymentChanged?: () => void;
 }
 
 export function PaymentSchedule({ 
   paymentsList, 
   currency = 'USD',
   contractId,
-  onPaymentAdded 
+  onPaymentAdded,
+  onPaymentChanged
 }: PaymentScheduleProps) {
 
   const dispatch = useAppDispatch();
@@ -80,6 +83,12 @@ export function PaymentSchedule({
   const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
   const [editingRow, setEditingRow] = useState<PaymentScheduleItem | null>(null);
 
+  // State for delete confirmation
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    show: boolean;
+    paymentId: string | null;
+  }>({ show: false, paymentId: null });
+
   // State for payment summary
   const [paymentSummary, setPaymentSummary] = useState<{
     contract_id: string;
@@ -90,10 +99,18 @@ export function PaymentSchedule({
     payment_count: number;
   } | null>(null);
 
+  // State for payment type options
+  const [paymentTypeOptions, setPaymentTypeOptions] = useState<Array<{
+    id: string;
+    name: string;
+    charge_category: string;
+    description: string;
+  }>>([]);
+
   const [newRow, setNewRow] = useState<NewPaymentRow>({
     due_date: '',
     amount: '',
-    type: '',
+    payment_type_id: '', // This will store the id
     principal: '',
     interest: '',
     liablity_balance: '',
@@ -104,6 +121,32 @@ export function PaymentSchedule({
   useEffect(()=>{
     setPayments(paymentsList)
   },[paymentsList])
+
+  // Fetch payment type options
+  useEffect(() => {
+    const fetchPaymentTypeOptions = async () => {
+      try {
+        const accessToken = await getAccessTokenSilently();
+        const response = await fetch(`${API_BASE_URL}/payments/dropdown-options`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        const data = await response.json();
+        if (data.payment_types && data.payment_types.length > 0) {
+          setPaymentTypeOptions(data.payment_types);
+          // Set default payment type to first option's id
+          setNewRow(prev => ({ ...prev, payment_type_id: data.payment_types[0].id }));
+        }
+      } catch (error) {
+        console.error('Error fetching payment type options:', error);
+      }
+    };
+
+    fetchPaymentTypeOptions();
+  }, [getAccessTokenSilently]);
 
   // Fetch payment summary
   useEffect(() => {
@@ -141,42 +184,28 @@ useEffect(() => {
     }, 0);
   }
 }, [isAddingRow]);
-  const formatCurrency = (amount: number) => {
-    if (!amount) return '-';
+  const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency,
-    }).format(amount);
+    }).format(value);
   };
 
-  const formatDate = (dateString: string | undefined) => {
-    if (!dateString) return '-';
-    try {
-      const date = new Date(dateString);
-      // Check if date is valid
-      if (isNaN(date.getTime())) return '-';
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
-      });
-    } catch (error) {
-      console.error('Invalid date:', dateString);
-      return '-';
-    }
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
   };
 
-  const getTotalPayments = () => {
-    return payments?.reduce((sum, payment) => sum + payment.totalPayment, 0);
+  const formatPaymentType = (paymentTypeId: string) => {
+    // Find the matching option by id from the fetched payment types
+    const option = paymentTypeOptions.find(opt => opt.id === paymentTypeId);
+    return option ? option.name : paymentTypeId;
   };
 
-  const getTotalPrincipal = () => {
-    return payments?.reduce((sum, payment) => sum + payment.principalPayment, 0);
-  };
-
-  const getTotalInterest = () => {
-    return payments?.reduce((sum, payment) => sum + payment.interestPayment, 0);
-  };
 
 type Status = 'paid' | 'pending' | 'upcoming' | 'scheduled';
 
@@ -219,7 +248,7 @@ const getStatusBadge = (status: string) => {
     setNewRow({
       due_date: '',
       amount: '',
-      type: '',
+      payment_type_id: paymentTypeOptions.length > 0 ? paymentTypeOptions[0].id : '',
       principal: '',
       interest: '',
       liablity_balance: '',
@@ -234,7 +263,7 @@ const getStatusBadge = (status: string) => {
     setNewRow({
       due_date: '',
       amount: '',
-      type:'',
+      payment_type_id: paymentTypeOptions.length > 0 ? paymentTypeOptions[0].id : '',
       principal: '',
       interest: '',
       liablity_balance: '',
@@ -267,6 +296,109 @@ const getStatusBadge = (status: string) => {
     setEditingRow(null);
   };
 
+  // Show delete confirmation
+  const handleDeleteClick = (paymentId: string) => {
+    setDeleteConfirmation({ show: true, paymentId });
+  };
+
+  // Cancel delete
+  const handleCancelDelete = () => {
+    setDeleteConfirmation({ show: false, paymentId: null });
+  };
+
+  // Confirm and delete payment
+  const handleConfirmDelete = async () => {
+    const paymentId = deleteConfirmation.paymentId;
+    if (!paymentId) return;
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      
+      const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete payment: ${response.status} ${response.statusText}`);
+      }
+
+      // Remove payment from local state
+      setPayments((prev) => prev.filter((payment) => payment.id !== paymentId));
+      dispatch(setSuccessMessage('Payment deleted successfully!'));
+      setDeleteConfirmation({ show: false, paymentId: null });
+      
+      // Refetch payments
+      onPaymentChanged?.();
+    } catch (error) {
+      console.error('Error deleting payment:', error);
+      dispatch(setErrorMessage(error instanceof Error ? error.message : 'Failed to delete payment. Please try again.'));
+      setDeleteConfirmation({ show: false, paymentId: null });
+    }
+  };
+
+  // Mark payment as paid
+  const handleMarkAsPaid = async (paymentId: string) => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      
+      if (!contractId) {
+        dispatch(setErrorMessage('No contract ID available'));
+        return;
+      }
+
+      const payment = payments.find(p => p.id === paymentId);
+      if (!payment) {
+        dispatch(setErrorMessage('Payment not found'));
+        return;
+      }
+
+      const currentDate = new Date().toISOString();
+      
+      const payload = {
+        contract_id: contractId.toString(),
+        due_date: payment.due_date,
+        amount: payment.amount.toString(),
+        payment_type_id: payment.payment_type_id,
+        status: 'Paid',
+        paid_date: currentDate
+      };
+
+      console.log('Marking payment as paid:', payload);
+
+      const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to mark payment as paid: ${response.status} ${response.statusText}`);
+      }
+
+      // Update payment in local state with the same paid_date
+      setPayments((prev) =>
+        prev.map((p) =>
+          p.id === paymentId ? { ...p, status: 'paid', paid_date: currentDate } : p
+        )
+      );
+      dispatch(setSuccessMessage('Payment marked as paid successfully!'));
+      console.log('Payment marked as paid:', payload);
+      
+      // Refetch payments
+      onPaymentChanged?.();
+    } catch (error) {
+      console.error('Error marking payment as paid:', error);
+      dispatch(setErrorMessage(error instanceof Error ? error.message : 'Failed to mark payment as paid. Please try again.'));
+    }
+  };
+
   // Save edited payment (PUT API call)
   const handleUpdatePayment = async (paymentId: string) => {
     if (!editingRow) return;
@@ -285,14 +417,11 @@ const getStatusBadge = (status: string) => {
         contract_id: contractId.toString(),
         due_date: editingRow.due_date,
         amount: editingRow.amount.toString(),
-        type: editingRow.type,
-        principal: editingRow?.principal?.toString() || '',
-        interest: editingRow?.interest?.toString() || '',
-        liablity_balance: editingRow?.liablity_balance?.toString() || '',
+        payment_type_id: editingRow.payment_type_id,
         status: editingRow.status === 'paid' ? 'Paid' : 'Scheduled',
         paid_date: editingRow.paid_date || null
       };
-
+      console.log("update payload", payload)
       const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
         method: 'PUT',
         headers: {
@@ -312,6 +441,9 @@ const getStatusBadge = (status: string) => {
       ));
 
       dispatch(setSuccessMessage('Payment updated successfully!'));
+      
+      // Refetch payments
+      onPaymentChanged?.();
       setEditingRowIndex(null);
       setEditingRow(null);
     } catch (error) {
@@ -340,7 +472,7 @@ const getStatusBadge = (status: string) => {
       // Validate required fields
      const requiredFields = {
         due_date: 'Due Date',
-        type: 'Type',
+        payment_type_id: 'Type',
         amount: 'Amount'
       };
 
@@ -358,6 +490,7 @@ const getStatusBadge = (status: string) => {
         contract_id: leaseId,
         amount: newRow.amount,
         due_date: new Date(newRow.due_date).toISOString(),
+        payment_type_id: newRow.payment_type_id,
         status: newRow.status,
         paid_date: newRow.paid_date ? new Date(newRow.paid_date).toISOString() : null
       };
@@ -385,7 +518,21 @@ const getStatusBadge = (status: string) => {
         onPaymentAdded(data);
       }
 
-     setPayments(prev => [...prev, data]);
+      // Map API response to PaymentScheduleItem format
+      const newPayment: PaymentScheduleItem = {
+        id: data.id,
+        period: payments.length + 1,
+        due_date: data.due_date,
+        amount: parseFloat(data.amount),
+        payment_type_id: data.payment_type_id,
+        principal: 0,
+        interest: 0,
+        liablity_balance: 0,
+        status: data.status === 'Paid' ? 'paid' : 'upcoming',
+        paid_date: data.paid_date || undefined
+      };
+
+      setPayments(prev => [...prev, newPayment]);
       
       // Dispatch success message
       dispatch(setSuccessMessage('Payment added successfully!'));
@@ -395,7 +542,7 @@ const getStatusBadge = (status: string) => {
       setNewRow({
         due_date: '',
         amount: '',
-        type:'',
+        payment_type_id: paymentTypeOptions.length > 0 ? paymentTypeOptions[0].id : '',
         principal: '',
         interest: '',
         liablity_balance: '',
@@ -419,6 +566,34 @@ const getStatusBadge = (status: string) => {
       severity='error'
       onClose={() => setAlertMessage('')}
     />
+    
+    {/* Delete Confirmation Dialog */}
+    {deleteConfirmation.show && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+          <h3 className="text-lg font-semibold mb-2">Confirm Delete</h3>
+          <p className="text-gray-600 mb-6">
+            Are you sure you want to delete this payment? This action cannot be undone.
+          </p>
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={handleCancelDelete}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    
     <div className="space-y-6">
       
       {/* Summary Cards */}
@@ -429,30 +604,36 @@ const getStatusBadge = (status: string) => {
             <DollarSign className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{formatCurrency(paymentSummary?.total_amount || getTotalPayments())}</div>
+            <div className="text-2xl">{formatCurrency(paymentSummary?.total_amount || 0)}</div>
             <p className="text-xs text-muted-foreground">{paymentSummary?.payment_count || payments.length} periods</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Total Principal</CardTitle>
+            <CardTitle className="text-sm">Average Payment</CardTitle>
             <TrendingUp className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{formatCurrency(getTotalPrincipal())}</div>
-            <p className="text-xs text-muted-foreground">Lease liability reduction</p>
+            <div className="text-2xl">
+              {formatCurrency(
+                paymentSummary?.payment_count 
+                  ? paymentSummary.total_amount / paymentSummary.payment_count 
+                  : 0
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">Per period</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Total Interest</CardTitle>
+            <CardTitle className="text-sm">Total Overdue</CardTitle>
             <Calendar className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{formatCurrency(getTotalInterest())}</div>
-            <p className="text-xs text-muted-foreground">Interest expense</p>
+            <div className="text-2xl">{formatCurrency(paymentSummary?.total_overdue || 0)}</div>
+            <p className="text-xs text-muted-foreground">Overdue payments</p>
           </CardContent>
         </Card>
       </div>
@@ -481,15 +662,12 @@ const getStatusBadge = (status: string) => {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-16">Period</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead className="text-right">Type</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="text-right">Principal</TableHead>
-                  <TableHead className="text-right">Interest</TableHead>
-                  <TableHead className="text-right">Liability Balance</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Paid Date</TableHead>
-                  <TableHead className="w-24">Actions</TableHead>
+                  <TableHead className="w-32">Due Date</TableHead>
+                  <TableHead className="w-48">Type</TableHead>
+                  <TableHead className="w-28 text-right">Amount</TableHead>
+                  <TableHead className="w-28">Status</TableHead>
+                  <TableHead className="w-32">Paid Date</TableHead>
+                  <TableHead className="w-28">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -512,20 +690,21 @@ const getStatusBadge = (status: string) => {
                           formatDate(payment.due_date)
                         )}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell>
                         {isEditing ? (
                           <select
-                            value={displayRow.type}
-                            onChange={(e) => handleEditInputChange('type', e.target.value)}
+                            value={displayRow.payment_type_id}
+                            onChange={(e) => handleEditInputChange('payment_type_id', e.target.value)}
                             className="w-full px-2 py-1 border rounded"
                           >
-                            <option value="base_rent">Base rent</option>
-                            <option value="cam">CAM</option>
-                            <option value="insurance">Insurance</option>
-                            <option value="property-tax">Property tax</option>
+                            {paymentTypeOptions.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.name}
+                              </option>
+                            ))}
                           </select>
                         ) : (
-                          payment.type
+                          formatPaymentType(payment.payment_type_id)
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -539,45 +718,6 @@ const getStatusBadge = (status: string) => {
                           />
                         ) : (
                           formatCurrency(payment.amount)
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            value={displayRow.principal}
-                            onChange={(e) => handleEditInputChange('principal', parseFloat(e.target.value))}
-                            className="w-full text-right"
-                            step="0.01"
-                          />
-                        ) : (
-                          formatCurrency(payment.principal)
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            value={displayRow.interest}
-                            onChange={(e) => handleEditInputChange('interest', parseFloat(e.target.value))}
-                            className="w-full text-right"
-                            step="0.01"
-                          />
-                        ) : (
-                          formatCurrency(payment.interest)
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            value={displayRow.liablity_balance}
-                            onChange={(e) => handleEditInputChange('liablity_balance', parseFloat(e.target.value))}
-                            className="w-full text-right"
-                            step="0.01"
-                          />
-                        ) : (
-                          formatCurrency(payment.liablity_balance)
                         )}
                       </TableCell>
                       <TableCell>
@@ -605,7 +745,7 @@ const getStatusBadge = (status: string) => {
                             disabled={displayRow.status !== 'paid'}
                           />
                         ) : (
-                          formatDate(payment.paid_date)
+                          payment.paid_date ? formatDate(payment.paid_date) : '-'
                         )}
                       </TableCell>
                       <TableCell>
@@ -628,14 +768,39 @@ const getStatusBadge = (status: string) => {
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEditRow(index)}
-                            disabled={isAddingRow || editingRowIndex !== null}
-                          >
-                            <Edit2 className="size-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            {payment.status.toLowerCase() !== 'paid' ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleMarkAsPaid(payment.id || '')}
+                                disabled={isAddingRow || editingRowIndex !== null || !payment.id}
+                                className="text-green-600 hover:text-green-700"
+                              >
+                                <Check className="size-4" />
+                              </Button>
+                            ) : (
+                              <div className="w-8"></div>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEditRow(index)}
+                              disabled={isAddingRow || editingRowIndex !== null}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <Edit2 className="size-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteClick(payment.id || '')}
+                              disabled={isAddingRow || editingRowIndex !== null || !payment.id}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </div>
                         )}
                       </TableCell>
                     </TableRow>
@@ -658,14 +823,15 @@ const getStatusBadge = (status: string) => {
                     </TableCell>
                     <TableCell>
                       <select
-                        value={newRow.type}
-                        onChange={(e) => handleInputChange('type', e.target.value)}
+                        value={newRow.payment_type_id}
+                        onChange={(e) => handleInputChange('payment_type_id', e.target.value)}
                         className="w-full px-2 py-1 border rounded"
                       > 
-                        <option value="base_rent">Base rent</option>
-                        <option value="cam">CAM</option>
-                        <option value="insurance">Insurance</option>
-                        <option value="property-tax">Property tax</option>
+                        {paymentTypeOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.name}
+                          </option>
+                        ))}
                       </select>
                     </TableCell>
                     <TableCell>
@@ -674,41 +840,6 @@ const getStatusBadge = (status: string) => {
                         placeholder="0.00"
                         value={newRow.amount}
                         onChange={(e) => handleInputChange('amount', e.target.value)}
-                        className="w-full text-right"
-                        step="0.01"
-                        required
-                      />
-                    </TableCell>
-                   
-                  
-                    <TableCell className="text-muted-foreground text-right">
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newRow.amount}
-                        onChange={(e) => handleInputChange('principal', e.target.value)}
-                        className="w-full text-right"
-                        step="0.01"
-                        required
-                      />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-right">
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newRow.amount}
-                        onChange={(e) => handleInputChange('interest', e.target.value)}
-                        className="w-full text-right"
-                        step="0.01"
-                        required
-                      />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-right">
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={newRow.amount}
-                        onChange={(e) => handleInputChange('liablity_balance', e.target.value)}
                         className="w-full text-right"
                         step="0.01"
                         required
