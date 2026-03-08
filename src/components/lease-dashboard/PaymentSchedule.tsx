@@ -3,7 +3,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
-import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2 } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2, Sparkles } from 'lucide-react';
+import { PaymentWizard } from '@/components/lease-dashboard/PaymentWizard';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
 import AppAlert from '@/components/common/AppAlert';
@@ -98,6 +99,16 @@ export function PaymentSchedule({
     total_overdue: number;
     payment_count: number;
   } | null>(null);
+
+  // State for payment wizard
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
+
+  // State for bulk selection
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<Set<string>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+
+  // State for bulk delete confirmation
+  const [bulkDeleteConfirmation, setBulkDeleteConfirmation] = useState(false);
 
   // State for payment type options
   const [paymentTypeOptions, setPaymentTypeOptions] = useState<Array<{
@@ -340,6 +351,67 @@ const getStatusBadge = (status: string) => {
     }
   };
 
+  // Handle checkbox selection
+  const handleCheckboxChange = (paymentId: string) => {
+    setSelectedPaymentIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(paymentId)) {
+        newSet.delete(paymentId);
+      } else {
+        newSet.add(paymentId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handle select all checkbox
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedPaymentIds(new Set());
+      setSelectAll(false);
+    } else {
+      const allIds = new Set(payments.filter(p => p.id).map(p => p.id!));
+      setSelectedPaymentIds(allIds);
+      setSelectAll(true);
+    }
+  };
+
+  // Handle bulk delete
+  const handleBulkDelete = async () => {
+    if (selectedPaymentIds.size === 0) return;
+
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const paymentIds = Array.from(selectedPaymentIds);
+
+      // Call bulk delete API
+      const response = await fetch(`${API_BASE_URL}/payments/bulk-delete`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ payment_ids: paymentIds }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to delete payments: ${response.status} ${response.statusText}`);
+      }
+
+      dispatch(setSuccessMessage(`Successfully deleted ${paymentIds.length} payment(s)!`));
+      setBulkDeleteConfirmation(false);
+      setSelectedPaymentIds(new Set());
+      setSelectAll(false);
+      
+      // Refetch payments
+      onPaymentChanged?.();
+    } catch (error) {
+      console.error('Error deleting payments:', error);
+      dispatch(setErrorMessage(error instanceof Error ? error.message : 'Failed to delete payments. Please try again.'));
+      setBulkDeleteConfirmation(false);
+    }
+  };
+
   // Mark payment as paid
   const handleMarkAsPaid = async (paymentId: string) => {
     try {
@@ -451,6 +523,51 @@ const getStatusBadge = (status: string) => {
       dispatch(setErrorMessage('Failed to update payment. Please try again.'));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // Handle wizard generated payments
+  const handleWizardGenerate = async (wizardData: {
+    payment_type_id: string;
+    amount: number;
+    frequency: string;
+    start_date: string;
+    number_of_payments?: number;
+    duration?: number;
+    duration_unit?: string;
+  }) => {
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const leaseId = createdLeaseId || contractId?.toString();
+      
+      if (!leaseId) {
+        dispatch(setErrorMessage('No lease ID available. Please create or select a lease first.'));
+        return;
+      }
+
+      // Call the wizard API endpoint
+      const response = await fetch(`${API_BASE_URL}/payments/wizard/${leaseId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(wizardData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate payments: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      dispatch(setSuccessMessage(`Successfully generated ${data.payments_created || 'multiple'} payments!`));
+      
+      // Refetch payments
+      onPaymentChanged?.();
+    } catch (error) {
+      console.error('Error generating payments:', error);
+      dispatch(setErrorMessage(error instanceof Error ? error.message : 'Failed to generate payments. Please try again.'));
     }
   };
 
@@ -642,25 +759,55 @@ const getStatusBadge = (status: string) => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Payment Amortization Schedule</CardTitle>
+            <CardTitle>Payment Schedule</CardTitle>
             <CardDescription>
-              Detailed breakdown of lease payments and liability amortization
+              Detailed breakdown of lease payments
             </CardDescription>
           </div>
-          <Button 
-            onClick={handleAddRow} 
-            disabled={isAddingRow || !hasLeaseId}
-            size="sm"
-          >
-            <Plus className="size-4 mr-2" />
-            Add Payment
-          </Button>
+          <div className="flex gap-2">
+            {selectedPaymentIds.size > 0 && (
+              <Button 
+                onClick={() => setBulkDeleteConfirmation(true)} 
+                size="sm"
+                variant="destructive"
+              >
+                <Trash2 className="size-4 mr-2" />
+                Delete Selected ({selectedPaymentIds.size})
+              </Button>
+            )}
+            <Button 
+              onClick={() => setIsWizardOpen(true)} 
+              disabled={!hasLeaseId}
+              size="sm"
+              className="bg-black text-white hover:bg-black/90"
+            >
+              <Sparkles className="size-4 mr-2" />
+              Payment Wizard
+            </Button>
+            <Button 
+              onClick={handleAddRow} 
+              disabled={isAddingRow || !hasLeaseId}
+              size="sm"
+              variant="outline"
+            >
+              <Plus className="size-4 mr-2" />
+              Add Payment
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-12">
+                    <input
+                      type="checkbox"
+                      checked={selectAll}
+                      onChange={handleSelectAll}
+                      className="cursor-pointer"
+                    />
+                  </TableHead>
                   <TableHead className="w-16">Period</TableHead>
                   <TableHead className="w-32">Due Date</TableHead>
                   <TableHead className="w-48">Type</TableHead>
@@ -677,6 +824,15 @@ const getStatusBadge = (status: string) => {
                   
                   return (
                     <TableRow key={index} className={isEditing ? 'bg-muted/50' : ''}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedPaymentIds.has(payment.id || '')}
+                          onChange={() => handleCheckboxChange(payment.id || '')}
+                          disabled={!payment.id}
+                          className="cursor-pointer"
+                        />
+                      </TableCell>
                       <TableCell>{index + 1}</TableCell>
                       <TableCell>
                         {isEditing ? (
@@ -810,6 +966,7 @@ const getStatusBadge = (status: string) => {
                 {/* New Row Input Form */}
                 {isAddingRow && (
                   <TableRow className="bg-muted/50">
+                    <TableCell></TableCell>
                     <TableCell>{payments.length + 1}</TableCell>
                     <TableCell>
                       <Input
@@ -890,6 +1047,40 @@ const getStatusBadge = (status: string) => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Payment Wizard Dialog */}
+      <PaymentWizard
+        open={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        onGenerate={handleWizardGenerate}
+        paymentTypeOptions={paymentTypeOptions}
+      />
+
+      {/* Bulk Delete Confirmation Dialog */}
+      {bulkDeleteConfirmation && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Confirm Bulk Delete</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Are you sure you want to delete {selectedPaymentIds.size} selected payment(s)? This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setBulkDeleteConfirmation(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleBulkDelete}
+              >
+                Delete {selectedPaymentIds.size} Payment(s)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
