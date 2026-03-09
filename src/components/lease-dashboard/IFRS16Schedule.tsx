@@ -47,6 +47,7 @@ export interface IFRS16ScheduleItem {
 interface IFRS16ScheduleProps {
   schedule: IFRS16ScheduleData;
   existingLease?: any;
+  paymentsList?: any[];
   currency?: string;
   onExport?: () => void;
   handleGenerateOrRegenerate?: (param: string) => void;
@@ -55,13 +56,16 @@ interface IFRS16ScheduleProps {
 export function IFRS16Schedule({ 
   schedule, 
   existingLease,
+  paymentsList,
   currency = 'USD',
   onExport,
   handleGenerateOrRegenerate
 }: IFRS16ScheduleProps) {
   // Get created lease ID from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
-  const hasLeaseId = !!createdLeaseId || !!schedule?.id || !!existingLease?.id;;
+  const hasLeaseId = !!createdLeaseId || !!schedule?.id || !!existingLease?.id;
+  const hasPayments = paymentsList && paymentsList.length > 0;
+  const hasScheduleData = schedule && schedule.schedule_data?.entries?.length > 0;
 
   const formatCurrency = (amount: number | string | undefined) => {
     if (!amount) return '$0.00';
@@ -150,7 +154,7 @@ export function IFRS16Schedule({
                 e.stopPropagation();
                 handleGenerateOrRegenerate?.(getGenerateStateName());
               }}
-              disabled={!hasLeaseId}
+              disabled={!hasLeaseId || (!hasPayments && !hasScheduleData)}
               className="gap-2"
             >
               {getGenerateStateName()}

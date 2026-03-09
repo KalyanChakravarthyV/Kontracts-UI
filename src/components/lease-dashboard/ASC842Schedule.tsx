@@ -5,6 +5,7 @@ import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Download } from 'lucide-react';
 import { useAppSelector } from '@/store/hooks';
+import { useState, useEffect } from 'react';
 
 export interface ASC842ScheduleEntry {
   period: number;
@@ -38,6 +39,7 @@ export interface ASC842ScheduleData {
 interface ASC842ScheduleProps {
   schedule: ASC842ScheduleData;
   existingLease?: any;
+  paymentsList?: any[];
   classification: 'operating' | 'finance';
   currency?: string;
   onExport?: () => void;
@@ -47,14 +49,28 @@ interface ASC842ScheduleProps {
 export function ASC842Schedule({ 
   schedule, 
   existingLease,
-  classification, 
+  paymentsList,
   currency = 'USD',
   onExport,
   handleGenerateOrRegenerate
 }: ASC842ScheduleProps) {
   // Get created lease ID from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
-  const hasLeaseId = !!createdLeaseId || !!schedule?.id || !!existingLease?.id;  
+  const hasLeaseId = !!createdLeaseId || !!schedule?.id || !!existingLease?.id;
+  const hasPayments = paymentsList && paymentsList.length > 0;
+  const hasScheduleData = schedule && schedule.schedule_data?.entries?.length > 0;
+  console.log("createdLeaseId", createdLeaseId);
+  // State for active tab
+  const [activeTab, setActiveTab] = useState<string>(
+    existingLease?.classification === 'finance' ? 'finance' : 'operating'
+  );
+  console.log("existingLease", existingLease);
+  // Update active tab when classification changes
+  useEffect(() => {
+    if (existingLease?.classification) {
+      setActiveTab(existingLease.classification === 'finance' ? 'finance' : 'operating');
+    }
+  }, [existingLease?.classification]);  
   const formatCurrency = (amount: number | string | undefined) => {
     if (!amount) return '$0.00';
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -90,8 +106,8 @@ export function ASC842Schedule({
             </div>
             <div className="flex items-center gap-2">
              
-              <Badge variant={classification === 'finance' ? 'default' : 'secondary'}>
-                {classification === 'finance' ? 'Finance Lease' : 'Operating Lease'}
+              <Badge variant={existingLease?.classification === 'finance' ? 'default' : 'secondary'}>
+                {existingLease?.classification === 'finance' ? 'Finance Lease' : 'Operating Lease'}
               </Badge>
             </div>
           </div>
@@ -119,7 +135,7 @@ export function ASC842Schedule({
       </Card>
 
       {/* Schedule Tabs */}
-      <Tabs defaultValue={existingLease?.classification === 'finance' ? 'finance' : 'operating'}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <div className="flex items-center justify-between mb-4">
           <TabsList>
             {existingLease?.classification === 'finance' && (
@@ -136,7 +152,7 @@ export function ASC842Schedule({
                 e.stopPropagation();
                 handleGenerateOrRegenerate?.(getGenerateStateName());
               }}
-              disabled={!hasLeaseId}
+              disabled={!hasLeaseId || (!hasPayments && !hasScheduleData)}
               className="gap-2"
             >
               {getGenerateStateName()}

@@ -37,6 +37,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const [activeTab, setActiveTab] = useState(initialTab);
   const [openLeaseModal, setOpenLeaseModal] = useState(false);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>('');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(20);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -77,6 +81,30 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       queryClient.invalidateQueries({ queryKey: ['/api/contracts'] });
     }
   }, [createdLeaseId, queryClient]);
+
+  // Pagination calculations
+  const totalPages = contracts ? Math.ceil(contracts.length / itemsPerPage) : 0;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedContracts = contracts ? contracts.slice(startIndex, endIndex) : [];
+
+  // Pagination handlers
+  const handlePreviousPage = () => {
+    setCurrentPage(prev => Math.max(prev - 1, 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage(prev => Math.min(prev + 1, totalPages));
+  };
+
+  const handlePageClick = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  // Reset to page 1 when contracts change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [contracts?.length]);
 
 
   type FieldType = "text" | "select";
@@ -1146,8 +1174,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                       </tr>
                     </thead>
                     <tbody>
-                      {contracts && contracts.length > 0 ? (
-                        contracts.map((contract: any) => {
+                      {paginatedContracts && paginatedContracts.length > 0 ? (
+                        paginatedContracts.map((contract: any) => {
                           const contractTypeLabel =
                             contract.classification || contract.contract_type || 'N/A';
                           const formatDate = (value?: string | null) =>
@@ -1266,25 +1294,35 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
               {contracts && contracts.length > 0 && (
                 <div className='flex items-center justify-between mt-6'>
                   <p className='text-sm text-muted-foreground'>
-                    Showing 1 to {contracts.length} of {contracts.length} results
+                    Showing {startIndex + 1} to {Math.min(endIndex, contracts.length)} of {contracts.length} results
                   </p>
                   <div className='flex items-center space-x-2'>
                     <button
+                      onClick={handlePreviousPage}
                       className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent transition-colors disabled:opacity-50'
-                      disabled
+                      disabled={currentPage === 1}
                       data-testid='button-prev-page'
                     >
                       Previous
                     </button>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => handlePageClick(page)}
+                        className={`px-3 py-1 text-sm rounded-md ${
+                          currentPage === page
+                            ? 'bg-primary text-primary-foreground'
+                            : 'border border-border hover:bg-accent transition-colors'
+                        }`}
+                        data-testid={`button-page-${page}`}
+                      >
+                        {page}
+                      </button>
+                    ))}
                     <button
-                      className='px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md'
-                      data-testid='button-current-page'
-                    >
-                      1
-                    </button>
-                    <button
+                      onClick={handleNextPage}
                       className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent transition-colors disabled:opacity-50'
-                      disabled
+                      disabled={currentPage >= totalPages}
                       data-testid='button-next-page'
                     >
                       Next

@@ -18,6 +18,7 @@ import {
 import { Textarea } from "@/components/lease-dashboard/ui/textarea";
 import { Button } from "@/components/lease-dashboard/ui/button";
 import { Checkbox } from "@/components/lease-dashboard/ui/checkbox";
+import AppAlert from "@/components/common/AppAlert";
 import { createLeaseFormFields } from "@/Utils/createLeaseFormFields";
 import type { FieldConfig } from "@/Utils/createLeaseFormFields";
 import type { LeaseFormData, LeaseData } from "@/types/lease";
@@ -62,6 +63,7 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   );
   const [currencies, setCurrencies] = useState<Array<{ code: string; name: string }>>([]);
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const { getAccessTokenSilently } = useAuth0();
 
   // Fetch currencies from API first
@@ -104,21 +106,55 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
     }
   }, [existingLease, currenciesLoaded]);
 
-const isFormValid = React.useMemo(() => {
-  return createLeaseFormFields.every((section) =>
-    section.fields.every((field) => {
-      if (!field.required) return true;
-      return !!formData[field.id]?.toString().trim();
-    })
-  );
-}, [formData]);
-
 const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const validateForm = (): { isValid: boolean; errors: string[] } => {
+    const errors: string[] = [];
+
+    // Check all required fields
+    createLeaseFormFields.forEach((section) => {
+      section.fields.forEach((field) => {
+        if (field.required) {
+          const value = formData[field.id];
+          if (!value || (typeof value === 'string' && !value.trim())) {
+            errors.push(field.label);
+          }
+        }
+      });
+    });
+
+    // Date validation: end_date should be after commencement_date
+    const commencementDate = formData.commencement_date;
+    const endDate = formData.end_date;
+    
+    if (commencementDate && endDate && typeof commencementDate === 'string' && typeof endDate === 'string') {
+      const commencementDateObj = new Date(commencementDate);
+      const endDateObj = new Date(endDate);
+      
+      if (endDateObj <= commencementDateObj) {
+        errors.push('Lease End Date must be after Commencement Date');
+      }
+    }
+
+    return { isValid: errors.length === 0, errors };
+  };
+
   const handleSubmit = async(e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form before submission
+    const validation = validateForm();
+    
+    if (!validation.isValid) {
+      // Show validation errors in alert component
+      setValidationErrors(validation.errors);
+      return;
+    }
+    
+    // Clear any previous validation errors
+    setValidationErrors([]);
     onSubmit?.(formData);    
   };
 
@@ -203,7 +239,28 @@ const handleChange = (field: string, value: any) => {
     }
   };
 
+  const getValidationMessage = () => {
+    if (validationErrors.length === 0) return '';
+    
+    return (
+      <div>
+        <div className="font-semibold mb-2">Please fill the following mandatory fields:</div>
+        <ol className="list-decimal list-inside space-y-1">
+          {validationErrors.map((error, index) => (
+            <li key={index}>{error}</li>
+          ))}
+        </ol>
+      </div>
+    );
+  };
+
   return (
+    <>
+    <AppAlert 
+      message={getValidationMessage()}
+      severity='error'
+      onClose={() => setValidationErrors([])}
+    />
     <form onSubmit={handleSubmit} className="space-y-6">
 
       {createLeaseFormFields.map((section) => (
@@ -253,9 +310,10 @@ const handleChange = (field: string, value: any) => {
 
 
       <div className="flex justify-end gap-4">
-        <Button type="button"  variant="outline">Cancel</Button>
-        <Button type="submit" disabled={!isFormValid}>Save Lease</Button>
+        <Button type="button" variant="outline">Cancel</Button>
+        <Button type="submit">Save Lease</Button>
       </div>
     </form>
+    </>
   );
 }

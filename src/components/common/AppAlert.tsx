@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import Alert from '@mui/material/Alert';
 
 export type AppAlertProps = {
-  message: string;
+  message: string | React.ReactNode;
   severity?: 'error' | 'success' | 'warning' | 'info';
   onClose?: () => void;
 };
@@ -17,7 +17,7 @@ const AppAlert = ({
     if (message && onClose) {
       const timer = setTimeout(() => {
         onClose();
-      }, 3000);
+      }, 10000);
 
       return () => clearTimeout(timer);
     }
@@ -26,10 +26,9 @@ const AppAlert = ({
   if (!message) return null;
 
   return (
-  <div className="absolute top-4 right-20 z-50">
-  <Alert severity={severity} onClose={onClose}>{message}</Alert>
-</div>
-
+    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-xl px-4">
+      <Alert severity={severity} onClose={onClose} sx={{ width: '100%' }}>{message}</Alert>
+    </div>
   );
 };
 
