@@ -34,6 +34,9 @@ interface WizardPayload {
   number_of_payments?: number;
   duration?: number;
   duration_unit?: string;
+  escalation_type?: 'percentage' | 'fixed_amount' | null;
+  escalation_value?: number | null;
+  escalation_frequency?: string | null;
 }
 
 export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, isGenerating = false }: PaymentWizardProps) {
@@ -45,6 +48,10 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
   const [useDuration, setUseDuration] = useState(false);
   const [duration, setDuration] = useState('');
   const [durationUnit, setDurationUnit] = useState('years');
+  const [escalationEnabled, setEscalationEnabled] = useState(false);
+  const [escalationType, setEscalationType] = useState<'percentage' | 'fixed_amount'>('percentage');
+  const [escalationValue, setEscalationValue] = useState('');
+  const [escalationFrequency, setEscalationFrequency] = useState('annually');
 
   // Reset form when dialog opens with default values
   useEffect(() => {
@@ -54,9 +61,13 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
       setFrequency('monthly'); // Default frequency
       setNumberOfPayments('36'); // Default number of payments
       setStartDate(''); // User should set this
-      setUseDuration(false); // Default to number of payments mode
-      setDuration('3'); // Default duration
-      setDurationUnit('months'); // Default duration unit from API example
+      setUseDuration(false);
+      setDuration('3');
+      setDurationUnit('months');
+      setEscalationEnabled(false);
+      setEscalationType('percentage');
+      setEscalationValue('');
+      setEscalationFrequency('annually');
     }
   }, [open, paymentTypeOptions]);
 
@@ -115,14 +126,24 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
       wizardData.number_of_payments = parseInt(numberOfPayments);
     }
 
+    // Add escalation fields if enabled
+    if (escalationEnabled && escalationValue) {
+      wizardData.escalation_type = escalationType;
+      wizardData.escalation_value = parseFloat(escalationValue);
+      wizardData.escalation_frequency = escalationFrequency;
+    }
+
     onGenerate(wizardData);
   };
 
   const isFormValid = () => {
-    if (useDuration) {
-      return paymentType && paymentAmount && duration && durationUnit && startDate;
+    const baseValid = useDuration
+      ? paymentType && paymentAmount && duration && durationUnit && startDate
+      : paymentType && paymentAmount && numberOfPayments && startDate;
+    if (escalationEnabled) {
+      return baseValid && escalationValue;
     }
-    return paymentType && paymentAmount && numberOfPayments && startDate;
+    return baseValid;
   };
 
   return (
@@ -257,6 +278,82 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
             />
           </div>
 
+          {/* Escalation Toggle */}
+          <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Escalation</Label>
+                <p className="text-sm text-muted-foreground">Automatically increase payment amount over time</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEscalationEnabled(!escalationEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  escalationEnabled ? 'bg-black' : 'bg-gray-300'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    escalationEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {escalationEnabled && (
+              <div className="space-y-4 pt-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="escalation-type">Escalation Type</Label>
+                    <Select value={escalationType} onValueChange={(v) => setEscalationType(v as 'percentage' | 'fixed_amount')}>
+                      <SelectTrigger id="escalation-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="percentage">Percentage (%)</SelectItem>
+                        <SelectItem value="fixed_amount">Fixed Amount ($)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="escalation-value">
+                      {escalationType === 'percentage' ? 'Escalation Rate (%)' : 'Escalation Amount ($)'}
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        {escalationType === 'percentage' ? '%' : '$'}
+                      </span>
+                      <Input
+                        id="escalation-value"
+                        type="number"
+                        value={escalationValue}
+                        onChange={(e) => setEscalationValue(e.target.value)}
+                        className="pl-7"
+                        placeholder={escalationType === 'percentage' ? '3' : '500'}
+                        min="0"
+                        step={escalationType === 'percentage' ? '0.1' : '1'}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="escalation-frequency">Escalation Frequency</Label>
+                  <Select value={escalationFrequency} onValueChange={setEscalationFrequency}>
+                    <SelectTrigger id="escalation-frequency">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="semi_annually">Semi-Annually</SelectItem>
+                      <SelectItem value="annually">Annually</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Preview */}
           {isFormValid() && (
             <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
@@ -273,8 +370,22 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
                   <span className="font-medium">Total Duration:</span> {calculateDuration()}
                 </p>
                 <p>
-                  <span className="font-medium">Total Amount:</span> ${calculateTotalAmount().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <span className="font-medium">Base Amount:</span> ${calculateTotalAmount().toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
+                {escalationEnabled && escalationValue && (
+                  <>
+                    <p>
+                      <span className="font-medium">Escalation:</span>{' '}
+                      {escalationType === 'percentage'
+                        ? `${escalationValue}% increase`
+                        : `$${parseFloat(escalationValue).toLocaleString('en-US', { minimumFractionDigits: 2 })} increase`}
+                    </p>
+                    <p>
+                      <span className="font-medium">Escalation Frequency:</span>{' '}
+                      {escalationFrequency.replace('_', '-').replace(/\b\w/g, (c) => c.toUpperCase())}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
