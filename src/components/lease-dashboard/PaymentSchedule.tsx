@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
-import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2, Sparkles } from 'lucide-react';
+import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { PaymentWizard } from '@/components/lease-dashboard/PaymentWizard';
 import { useState, useEffect, useRef } from 'react';
 import { useAuth0 } from '@auth0/auth0-react';
@@ -15,7 +15,7 @@ import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageS
 // API Response type
 export interface PaymentApiResponse {
   id: string;
-  contract_id: string;
+  lease_id: string;
   amount: string;
   due_date: string;
   payment_type_id: string;
@@ -92,7 +92,6 @@ export function PaymentSchedule({
 
   // State for payment summary
   const [paymentSummary, setPaymentSummary] = useState<{
-    contract_id: string;
     total_amount: number;
     total_paid: number;
     total_scheduled: number;
@@ -102,6 +101,7 @@ export function PaymentSchedule({
 
   // State for payment wizard
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [isWizardGenerating, setIsWizardGenerating] = useState(false);
 
   // State for bulk selection
   const [selectedPaymentIds, setSelectedPaymentIds] = useState<Set<string>>(new Set());
@@ -166,7 +166,7 @@ export function PaymentSchedule({
 
       try {
         const accessToken = await getAccessTokenSilently();
-        const response = await fetch(`${API_BASE_URL}/payments/contract/${contractId}/summary`, {
+        const response = await fetch(`${API_BASE_URL}/payments/lease/${contractId}/summary`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -431,7 +431,7 @@ const getStatusBadge = (status: string) => {
       const currentDate = new Date().toISOString();
       
       const payload = {
-        contract_id: contractId.toString(),
+        lease_id: contractId.toString(),
         due_date: payment.due_date,
         amount: payment.amount.toString(),
         payment_type_id: payment.payment_type_id,
@@ -486,7 +486,7 @@ const getStatusBadge = (status: string) => {
       }
 
       const payload = {
-        contract_id: contractId.toString(),
+        lease_id: contractId.toString(),
         due_date: editingRow.due_date,
         amount: editingRow.amount.toString(),
         payment_type_id: editingRow.payment_type_id,
@@ -537,9 +537,10 @@ const getStatusBadge = (status: string) => {
     duration_unit?: string;
   }) => {
     try {
+      setIsWizardGenerating(true);
       const accessToken = await getAccessTokenSilently();
       const leaseId = createdLeaseId || contractId?.toString();
-      
+
       if (!leaseId) {
         dispatch(setErrorMessage('No lease ID available. Please create or select a lease first.'));
         return;
@@ -560,14 +561,17 @@ const getStatusBadge = (status: string) => {
       }
 
       const data = await response.json();
-      
+
       dispatch(setSuccessMessage(`Successfully generated ${data.payments_created || 'multiple'} payments!`));
-      
+      setIsWizardOpen(false);
+
       // Refetch payments
       onPaymentChanged?.();
     } catch (error) {
       console.error('Error generating payments:', error);
       dispatch(setErrorMessage(error instanceof Error ? error.message : 'Failed to generate payments. Please try again.'));
+    } finally {
+      setIsWizardGenerating(false);
     }
   };
 
@@ -604,7 +608,7 @@ const getStatusBadge = (status: string) => {
 
       // Prepare payload for API
       const payload = {
-        contract_id: leaseId,
+        lease_id: leaseId,
         amount: newRow.amount,
         due_date: new Date(newRow.due_date).toISOString(),
         payment_type_id: newRow.payment_type_id,
@@ -775,14 +779,16 @@ const getStatusBadge = (status: string) => {
                 Delete Selected ({selectedPaymentIds.size})
               </Button>
             )}
-            <Button 
-              onClick={() => setIsWizardOpen(true)} 
-              disabled={!hasLeaseId}
+            <Button
+              onClick={() => setIsWizardOpen(true)}
+              disabled={!hasLeaseId || isWizardGenerating}
               size="sm"
               className="bg-black text-white hover:bg-black/90"
             >
-              <Sparkles className="size-4 mr-2" />
-              Payment Wizard
+              {isWizardGenerating
+                ? <><Loader2 className="size-4 mr-2 animate-spin" />Generating...</>
+                : <><Sparkles className="size-4 mr-2" />Payment Wizard</>
+              }
             </Button>
             <Button 
               onClick={handleAddRow} 
@@ -1054,6 +1060,7 @@ const getStatusBadge = (status: string) => {
         onClose={() => setIsWizardOpen(false)}
         onGenerate={handleWizardGenerate}
         paymentTypeOptions={paymentTypeOptions}
+        isGenerating={isWizardGenerating}
       />
 
       {/* Bulk Delete Confirmation Dialog */}

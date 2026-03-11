@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/lease-dashboard/ui/tabs';
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
-import { Download } from 'lucide-react';
+import { Download, Loader2 } from 'lucide-react';
 import { useAppSelector } from '@/store/hooks';
 
 export interface IFRS16ScheduleEntry {
@@ -49,15 +49,17 @@ interface IFRS16ScheduleProps {
   existingLease?: any;
   paymentsList?: any[];
   currency?: string;
+  isGenerating?: boolean;
   onExport?: () => void;
   handleGenerateOrRegenerate?: (param: string) => void;
 }
 
-export function IFRS16Schedule({ 
-  schedule, 
+export function IFRS16Schedule({
+  schedule,
   existingLease,
   paymentsList,
   currency = 'USD',
+  isGenerating = false,
   onExport,
   handleGenerateOrRegenerate
 }: IFRS16ScheduleProps) {
@@ -154,17 +156,20 @@ export function IFRS16Schedule({
                 e.stopPropagation();
                 handleGenerateOrRegenerate?.(getGenerateStateName());
               }}
-              disabled={!hasLeaseId || (!hasPayments && !hasScheduleData)}
+              disabled={isGenerating || !hasLeaseId || (!hasPayments && !hasScheduleData)}
               className="gap-2"
             >
-              {getGenerateStateName()}
+              {isGenerating
+                ? <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>
+                : getGenerateStateName()
+              }
             </Button>
             <Button
               onClick={(e) => {
                 e.stopPropagation();
                 onExport?.();
               }}
-              disabled={!hasLeaseId || !(schedule && entries.length > 0)}
+              disabled={isGenerating || !hasLeaseId || !(schedule && entries.length > 0)}
               className="gap-2"
             >
               <Download className="h-4 w-4" />

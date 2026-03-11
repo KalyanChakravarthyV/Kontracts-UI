@@ -36,6 +36,8 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const [paymentScheduleData, setPaymentScheduleData] = useState([])
   const [asc842ScheduleData, setASC842ScheduleData] = useState<any>(null)
   const [ifrs16ScheduleData, setIFRS16ScheduleData] = useState<any>(null)
+  const [isGeneratingASC842, setIsGeneratingASC842] = useState(false)
+  const [isGeneratingIFRS16, setIsGeneratingIFRS16] = useState(false)
 
   // Sample Payment Schedule Data
   const samplePayments: PaymentScheduleItem[] = generateSamplePayments();
@@ -69,7 +71,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           params: {
             skip: 0,
             limit: 100,
-            contract_id: contractId,
+            lease_id: contractId,
             sort_by: "due_date",
             sort_order: "asc",
           },
@@ -216,6 +218,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
 
     try {
+      setIsGeneratingASC842(true);
       const accessToken = await getAccessTokenSilently();
       const response = await axios.post(
         `${API_BASE_URL}/schedules/asc842/${contractId}`,
@@ -231,13 +234,15 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       if (response?.data) {
         console.log('ASC842 schedule generated successfully:', response.data);
         dispatch(setSuccessMessage('ASC842 schedule generated successfully!'));
-        
+
         // Refetch the ASC842 schedule data
         await fetchASC842Schedule();
       }
     } catch (error) {
       console.error('Error generating ASC842 schedule:', error);
       dispatch(setErrorMessage('Failed to generate ASC842 schedule. Please try again.'));
+    } finally {
+      setIsGeneratingASC842(false);
     }
   };
 
@@ -248,6 +253,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
 
     try {
+      setIsGeneratingASC842(true);
       const accessToken = await getAccessTokenSilently();
       await axios.delete(
         `${API_BASE_URL}/schedules/asc842/${contractId}`,
@@ -259,13 +265,13 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       );
 
       console.log('ASC842 schedule deleted successfully');
-      dispatch(setSuccessMessage('ASC842 schedule deleted successfully!'));
-      
+
       // After successful deletion, regenerate the schedule
       await generateASC842();
     } catch (error) {
       console.error('Error deleting ASC842 schedule:', error);
       dispatch(setErrorMessage('Failed to delete ASC842 schedule. Please try again.'));
+      setIsGeneratingASC842(false);
     }
   };
 
@@ -284,6 +290,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
 
     try {
+      setIsGeneratingIFRS16(true);
       const accessToken = await getAccessTokenSilently();
       const response = await axios.post(
         `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
@@ -299,13 +306,15 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       if (response?.data) {
         console.log('IFRS16 schedule generated successfully:', response.data);
         dispatch(setSuccessMessage('IFRS16 schedule generated successfully!'));
-        
+
         // Refetch the IFRS16 schedule data
         await fetchIFRS16Schedule();
       }
     } catch (error) {
       console.error('Error generating IFRS16 schedule:', error);
       dispatch(setErrorMessage('Failed to generate IFRS16 schedule. Please try again.'));
+    } finally {
+      setIsGeneratingIFRS16(false);
     }
   };
 
@@ -316,6 +325,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
 
     try {
+      setIsGeneratingIFRS16(true);
       const accessToken = await getAccessTokenSilently();
       await axios.delete(
         `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
@@ -327,13 +337,13 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       );
 
       console.log('IFRS16 schedule deleted successfully');
-      dispatch(setSuccessMessage('IFRS16 schedule deleted successfully!'));
-      
+
       // After successful deletion, regenerate the schedule
       await generateIFRS16();
     } catch (error) {
       console.error('Error deleting IFRS16 schedule:', error);
       dispatch(setErrorMessage('Failed to delete IFRS16 schedule. Please try again.'));
+      setIsGeneratingIFRS16(false);
     }
   };
 
@@ -531,9 +541,10 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
             <ASC842Schedule
               schedule={asc842ScheduleData}
               existingLease={leaseData}
-              paymentsList={paymentScheduleData} 
+              paymentsList={paymentScheduleData}
               classification="operating"
               currency="USD"
+              isGenerating={isGeneratingASC842}
               handleGenerateOrRegenerate={handleGenerateOrRegenerateASC842}
               onExport={exportASC842Schedule}
             />
@@ -545,6 +556,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
               existingLease={leaseData}
               paymentsList={paymentScheduleData}
               currency="USD"
+              isGenerating={isGeneratingIFRS16}
               handleGenerateOrRegenerate={handleGenerateOrRegenerateIFRS16}
               onExport={exportIFRS16Schedule}
             />

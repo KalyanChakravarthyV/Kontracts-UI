@@ -113,13 +113,18 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     mutationFn: async ({
       contractId,
       type,
-      data,
     }: {
       contractId: string;
       type: string;
       data: any;
     }) => {
-      return await apiRequest('POST', `/api/contracts/${contractId}/compliance/${type}`, data);
+      const accessToken = await getAccessTokenSilently();
+      const schedulePath = type === 'IFRS16' ? 'ifrs16' : 'asc842';
+      return await axios.post(
+        `${API_BASE_URL}/schedules/${schedulePath}/${contractId}`,
+        {},
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
     },
     onSuccess: () => {
       toast({
@@ -142,14 +147,16 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const journalEntryMutation = useMutation({
     mutationFn: async ({
       contractId,
-      scheduleType,
     }: {
       contractId: string;
       scheduleType: string;
     }) => {
-      return await apiRequest('POST', `/api/contracts/${contractId}/journal-entries`, {
-        scheduleType,
-      });
+      const accessToken = await getAccessTokenSilently();
+      return await axios.post(
+        `${API_BASE_URL}/journal-entries/lease/${contractId}`,
+        {},
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
     },
     onSuccess: () => {
       toast({
@@ -168,16 +175,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   });
 
   const handleGenerateSchedule = async (contractId: string, type: 'ASC842' | 'IFRS16') => {
-    const contract = contracts?.find((c: any) => c.id === contractId);
-    const contractAmount = contract ? parseFloat(contract.amount) : 100000;
-
-    const data = {
-      discountRate: 0.05,
-      leaseTerm: 5,
-      annualPayment: contractAmount / 5, // Default annual payment based on contract amount
-    };
-
-    complianceScheduleMutation.mutate({ contractId, type, data });
+    complianceScheduleMutation.mutate({ contractId, type, data: undefined });
   };
 
   const handleGenerateJournal = async (contractId: string, scheduleType: string) => {
@@ -298,7 +296,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     // Get contract info for display
     const enrichedPayments = Array.isArray(payments)
       ? payments.map((payment: any) => {
-          const contract = contracts?.find((c: any) => c.id === payment.contractId);
+          const contract = contracts?.find((c: any) => c.id === payment.lease_id);
           return {
             ...payment,
             contractName: contract?.lease_name || 'Unknown Contract',

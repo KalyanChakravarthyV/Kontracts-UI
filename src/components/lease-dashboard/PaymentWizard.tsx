@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
 import { Label } from '@/components/lease-dashboard/ui/label';
@@ -23,6 +23,7 @@ interface PaymentWizardProps {
   onClose: () => void;
   onGenerate: (wizardData: WizardPayload) => void;
   paymentTypeOptions: Array<{ id: string; name: string }>;
+  isGenerating?: boolean;
 }
 
 interface WizardPayload {
@@ -35,7 +36,7 @@ interface WizardPayload {
   duration_unit?: string;
 }
 
-export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions }: PaymentWizardProps) {
+export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, isGenerating = false }: PaymentWizardProps) {
   const [paymentType, setPaymentType] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [frequency, setFrequency] = useState('monthly');
@@ -115,7 +116,6 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions }:
     }
 
     onGenerate(wizardData);
-    onClose();
   };
 
   const isFormValid = () => {
@@ -129,12 +129,7 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions }:
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-2xl font-semibold">Payment Wizard</DialogTitle>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle className="text-2xl font-semibold">Payment Wizard</DialogTitle>
           <DialogDescription className="text-base">
             Create a payment schedule by specifying the amount, frequency, and duration.
           </DialogDescription>
@@ -290,8 +285,11 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions }:
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={generatePayments} disabled={!isFormValid()}>
-            Generate Payments
+          <Button onClick={generatePayments} disabled={isGenerating || !isFormValid()} className="gap-2">
+            {isGenerating
+              ? <><Loader2 className="h-4 w-4 animate-spin" />Generating...</>
+              : 'Generate Payments'
+            }
           </Button>
         </div>
       </DialogContent>
