@@ -3,8 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import axios from "axios";
 import { useAuthToken } from '@/hooks/use-auth-token';
-import { JournalEntries } from '@/components/lease-dashboard/JournalEntries';
-import type { JournalEntryResponse } from '@/components/lease-dashboard/JournalEntries';
+import { GlobalJournalEntries } from '@/components/lease-dashboard/GlobalJournalEntries';
+import { GlobalPayments } from '@/components/lease-dashboard/GlobalPayments';
 import LeaseDetails from '@/components/LeaseDetails'
 import LeaseModal from '@/components/LeaseModal'
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
@@ -200,18 +200,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   function PaymentScheduleView({ contracts }: { contracts: any[] }) {
     const { getToken } = useAuthToken();
 
-    const { data: payments, isLoading: paymentsLoading } = useQuery({
-      queryKey: [`${API_BASE_URL}/payments/`],
-      queryFn: async () => {
-        const token = await getToken();
-        const res = await fetch(`${API_BASE_URL}/payments/?limit=1000`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-        return res.json();
-      },
-    });
-
     const { data: summary } = useQuery({
       queryKey: [`${API_BASE_URL}/payments/summary`],
       queryFn: async () => {
@@ -227,38 +215,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     const fmt = (val: number) =>
       new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val ?? 0);
 
-    // Get contract info for display
-    const enrichedPayments = Array.isArray(payments)
-      ? payments.map((payment: any) => {
-          const contract = contracts?.find((c: any) => String(c.id) === String(payment.lease_id));
-          return {
-            ...payment,
-            contractName: contract?.lease_name || payment.lease_id || '—',
-            dueDate: payment.due_date ? new Date(payment.due_date) : null,
-          };
-        })
-      : [];
-
     return (
       <div className='space-y-6'>
-        <div className='flex items-center justify-between'>
-          <h4 className='text-lg font-semibold'>Upcoming Payments</h4>
-          <div className='flex space-x-2'>
-            <button
-              className='px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
-              data-testid='button-export-payments'
-            >
-              <i className='fas fa-download mr-2'></i>Export Schedule
-            </button>
-            <button
-              className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent'
-              data-testid='button-filter-payments'
-            >
-              <i className='fas fa-filter mr-2'></i>Filter
-            </button>
-          </div>
-        </div>
-
         {/* Summary — row 1: totals */}
         <div className='grid grid-cols-1 md:grid-cols-3 gap-4 mb-4'>
           <div className='bg-accent/50 rounded-lg p-4'>
@@ -309,78 +267,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
           </div>
         </div>
 
-        <div className='overflow-x-auto'>
-          <table className='w-full text-sm'>
-            <thead>
-              <tr className='border-b border-border'>
-                <th className='text-left py-3 px-4 font-medium text-muted-foreground'>Contract</th>
-                <th className='text-left py-3 px-4 font-medium text-muted-foreground'>Payment Type</th>
-                <th className='text-left py-3 px-4 font-medium text-muted-foreground'>Due Date</th>
-                <th className='text-left py-3 px-4 font-medium text-muted-foreground'>Amount</th>
-                <th className='text-left py-3 px-4 font-medium text-muted-foreground'>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paymentsLoading ? (
-                <tr>
-                  <td colSpan={5} className='py-8 text-center'>
-                    Loading payments...
-                  </td>
-                </tr>
-              ) : enrichedPayments.length > 0 ? (
-                enrichedPayments.slice(0, 10).map((payment: any) => (
-                  <tr
-                    key={payment.id}
-                    className='border-b border-border hover:bg-muted/50'
-                    data-testid={`payment-row-${payment.id}`}
-                  >
-                    <td
-                      className='py-4 px-4 font-medium'
-                      data-testid={`text-payment-contract-${payment.id}`}
-                    >
-                      {payment.contractName}
-                    </td>
-                    <td className='py-4 px-4 text-muted-foreground' data-testid={`text-payment-type-${payment.id}`}>
-                      {payment.payment_type_id || '—'}
-                    </td>
-                    <td className='py-4 px-4' data-testid={`text-payment-due-${payment.id}`}>
-                      {payment.dueDate ? payment.dueDate.toLocaleDateString() : '—'}
-                    </td>
-                    <td
-                      className='py-4 px-4 font-medium'
-                      data-testid={`text-payment-amount-${payment.id}`}
-                    >{`$${parseFloat(payment.amount).toLocaleString()}`}</td>
-                    <td className='py-4 px-4'>
-                      <span
-                        className={`px-2 py-1 rounded-full text-xs font-medium ${payment.status === 'Paid'
-                            ? 'bg-green-100 text-green-800'
-                            : payment.status === 'Due'
-                              ? 'bg-red-100 text-red-800'
-                              : payment.status === 'Overdue'
-                                ? 'bg-red-200 text-red-900'
-                                : 'bg-blue-100 text-blue-800'
-                          }`}
-                        data-testid={`badge-payment-status-${payment.id}`}
-                      >
-                        {payment.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className='py-8 text-center text-muted-foreground'>
-                    <div className='flex flex-col items-center'>
-                      <i className='fas fa-calendar-times text-4xl mb-4'></i>
-                      <p className='text-lg font-medium mb-2'>No upcoming payments</p>
-                      <p className='text-sm'>All payments are up to date</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <GlobalPayments totalCount={summary?.payment_count} contracts={contracts} />
 
       </div>
     );
@@ -388,20 +275,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
 
   // Journal Entries View Component
-  function JournalEntriesView() {
+  function JournalEntriesView({ contracts }: { contracts: any[] }) {
     const { getToken } = useAuthToken();
-
-    const { data: journalEntries = [], isLoading } = useQuery<JournalEntryResponse[]>({
-      queryKey: [`${API_BASE_URL}/journal-entries/`],
-      queryFn: async () => {
-        const token = await getToken();
-        const res = await fetch(`${API_BASE_URL}/journal-entries/?limit=1000`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
-        return res.json();
-      },
-    });
 
     const { data: summary } = useQuery({
       queryKey: [`${API_BASE_URL}/journal-entries/summary`],
@@ -417,10 +292,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
     const fmt = (val: number) =>
       new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(val ?? 0);
-
-    if (isLoading) {
-      return <div className='py-12 text-center text-muted-foreground'>Loading journal entries...</div>;
-    }
 
     return (
       <div className='space-y-6'>
@@ -480,10 +351,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
           ))}
         </div>
 
-        <JournalEntries
-          entries={journalEntries}
-          hasLeaseId={false}
-        />
+        <GlobalJournalEntries totalCount={summary?.entry_count} contracts={contracts} />
       </div>
     );
   }
@@ -792,7 +660,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
           {/* Journal Entries Tab */}
           {activeTab === 'journal' && (
-            <JournalEntriesView />
+            <JournalEntriesView contracts={contracts} />
           )}
         </div>
       </div>
