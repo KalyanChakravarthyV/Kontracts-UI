@@ -6,7 +6,7 @@ import { Input } from '@/components/lease-dashboard/ui/input';
 import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { PaymentWizard } from '@/components/lease-dashboard/PaymentWizard';
 import { useState, useEffect, useRef } from 'react';
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthToken } from '@/hooks/use-auth-token';
 import AppAlert from '@/components/common/AppAlert';
 import { API_BASE_URL } from '@/config/api';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
@@ -67,7 +67,7 @@ export function PaymentSchedule({
 }: PaymentScheduleProps) {
 
   const dispatch = useAppDispatch();
-  const { getAccessTokenSilently } = useAuth0();
+  const { getToken: getAccessTokenSilently } = useAuthToken();
   
   // Get created lease ID from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
@@ -718,7 +718,7 @@ const getStatusBadge = (status: string) => {
     <div className="space-y-6">
       
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm">Total Payments</CardTitle>
@@ -726,34 +726,39 @@ const getStatusBadge = (status: string) => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl">{formatCurrency(paymentSummary?.total_amount || 0)}</div>
-            <p className="text-xs text-muted-foreground">{paymentSummary?.payment_count || payments.length} periods</p>
+            <p className="text-xs text-muted-foreground">{paymentSummary?.payment_count ?? payments.length} periods</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm">Average Payment</CardTitle>
+            <CardTitle className="text-sm">Total Paid</CardTitle>
             <TrendingUp className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">
-              {formatCurrency(
-                paymentSummary?.payment_count 
-                  ? paymentSummary.total_amount / paymentSummary.payment_count 
-                  : 0
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">Per period</p>
+            <div className="text-2xl">{formatCurrency(paymentSummary?.total_paid || 0)}</div>
+            <p className="text-xs text-muted-foreground">Payments received</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm">Total Scheduled</CardTitle>
+            <Calendar className="size-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl">{formatCurrency(paymentSummary?.total_scheduled || 0)}</div>
+            <p className="text-xs text-muted-foreground">Upcoming payments</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm">Total Overdue</CardTitle>
-            <Calendar className="size-4 text-muted-foreground" />
+            <DollarSign className="size-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl">{formatCurrency(paymentSummary?.total_overdue || 0)}</div>
+            <div className="text-2xl text-red-600">{formatCurrency(paymentSummary?.total_overdue || 0)}</div>
             <p className="text-xs text-muted-foreground">Overdue payments</p>
           </CardContent>
         </Card>
@@ -763,7 +768,7 @@ const getStatusBadge = (status: string) => {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle>Payment Schedule</CardTitle>
+            <CardTitle>Payments</CardTitle>
             <CardDescription>
               Detailed breakdown of lease payments
             </CardDescription>

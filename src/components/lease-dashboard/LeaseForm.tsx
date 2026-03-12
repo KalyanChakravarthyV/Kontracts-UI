@@ -22,7 +22,7 @@ import AppAlert from "@/components/common/AppAlert";
 import { createLeaseFormFields } from "@/Utils/createLeaseFormFields";
 import type { FieldConfig } from "@/Utils/createLeaseFormFields";
 import type { LeaseFormData, LeaseData } from "@/types/lease";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useAuthToken } from "@/hooks/use-auth-token";
 import { API_BASE_URL } from "@/config/api";
 
 interface LeaseFormProps {
@@ -64,7 +64,7 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   const [currencies, setCurrencies] = useState<Array<{ code: string; name: string }>>([]);
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const { getAccessTokenSilently } = useAuth0();
+  const { getToken: getAccessTokenSilently } = useAuthToken();
 
   // Fetch currencies from API first
   useEffect(() => {

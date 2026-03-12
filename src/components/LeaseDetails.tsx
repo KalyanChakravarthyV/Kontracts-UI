@@ -7,11 +7,11 @@ import type { PaymentScheduleItem } from '@/components/lease-dashboard/PaymentSc
 import { ASC842Schedule } from '@/components/lease-dashboard/ASC842Schedule';
 import { IFRS16Schedule } from '@/components/lease-dashboard/IFRS16Schedule';
 import { JournalEntries } from '@/components/lease-dashboard/JournalEntries';
-import type { JournalEntry } from '@/components/lease-dashboard/JournalEntries';
+import type { JournalEntryResponse } from '@/components/lease-dashboard/JournalEntries';
 import { AlertMessage } from '@/components/common/AlertMessage';
 import { FileText, DollarSign, BookOpen, Receipt } from 'lucide-react';
 import axios from "axios";
-import { useAuth0 } from '@auth0/auth0-react';
+import { useAuthToken } from '@/hooks/use-auth-token';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setCreatedLeaseId } from '@/store/slices/newLeaseSlice';
 import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageSlice';
@@ -38,21 +38,15 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const [ifrs16ScheduleData, setIFRS16ScheduleData] = useState<any>(null)
   const [isGeneratingASC842, setIsGeneratingASC842] = useState(false)
   const [isGeneratingIFRS16, setIsGeneratingIFRS16] = useState(false)
-
-  // Sample Payment Schedule Data
-  const samplePayments: PaymentScheduleItem[] = generateSamplePayments();
-
-
-
-  // Sample Journal Entries
-  const sampleJournalEntries: JournalEntry[] = generateSampleJournalEntries();
+  const [journalEntriesData, setJournalEntriesData] = useState<JournalEntryResponse[]>([])
+  const [isGeneratingJournals, setIsGeneratingJournals] = useState(false)
   useEffect(() => {
     if (contractId) {
       fetchPayments()
       fetchASC842Schedule()
       fetchIFRS16Schedule()
+      fetchJournalEntries()
     }
-
   }, [contractId])
 
   // Refetch schedules when payment data changes
@@ -138,7 +132,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       console.error("Error fetching ifrs16 schedule", error);
     }
   }
-  const { getAccessTokenSilently } = useAuth0();
+  const { getToken: getAccessTokenSilently } = useAuthToken();
   
   const exportASC842Schedule = async () => {
     try {
@@ -354,6 +348,58 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       await deleteExistingIFRS16Schedule();
     }
   };
+
+  const fetchJournalEntries = async () => {
+    if (!contractId) return;
+    try {
+      const accessToken = await getAccessTokenSilently();
+      const response = await axios.get(`${API_BASE_URL}/journal-entries/`, {
+        params: { lease_id: contractId, limit: 1000 },
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (Array.isArray(response.data)) {
+        setJournalEntriesData(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching journal entries:', error);
+    }
+  };
+
+  const generateJournalEntries = async () => {
+    const leaseId = createdLeaseId || contractId;
+    if (!leaseId) {
+      dispatch(setErrorMessage('No lease ID available'));
+      return;
+    }
+    try {
+      setIsGeneratingJournals(true);
+      const accessToken = await getAccessTokenSilently();
+      const scheduleType = leaseData?.classification === 'finance' ? 'IFRS16' : 'ASC842';
+      const hasExisting = journalEntriesData.length > 0;
+      const method = hasExisting ? 'put' : 'post';
+      const response = await axios[method](
+        `${API_BASE_URL}/journal-entries/lease/${leaseId}`,
+        {},
+        {
+          params: { schedule_type: scheduleType },
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        }
+      );
+      if (response?.data) {
+        dispatch(setSuccessMessage(`Journal entries ${hasExisting ? 'regenerated' : 'generated'} successfully!`));
+        await fetchJournalEntries();
+      }
+    } catch (error) {
+      console.error('Error generating journal entries:', error);
+      dispatch(setErrorMessage('Failed to generate journal entries. Please try again.'));
+    } finally {
+      setIsGeneratingJournals(false);
+    }
+  };
+
+  const handleGenerateOrRegenerateJournals = async (_param: string) => {
+    await generateJournalEntries();
+  };
   const handleAddPayment = (data: any)=>{
     console.log("data", data)
   }
@@ -563,7 +609,13 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
           </TabsContent>
 
           <TabsContent value="journal">
-            <JournalEntries entries={sampleJournalEntries} currency="USD" />
+            <JournalEntries
+              entries={journalEntriesData}
+              currency="USD"
+              isGenerating={isGeneratingJournals}
+              hasLeaseId={!!(createdLeaseId || contractId)}
+              handleGenerateOrRegenerate={handleGenerateOrRegenerateJournals}
+            />
           </TabsContent>
         </Tabs>
       </div>
@@ -571,183 +623,3 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   );
 }
 
-// Helper function to generate sample payment schedule
-function generateSamplePayments(): PaymentScheduleItem[] {
-  const payments: PaymentScheduleItem[] = [];
-  const monthlyRent = 10000;
-  const cam = 1500;
-  const insurance = 500;
-  const propertyTax = 800;
-  const discountRate = 0.05 / 12; // 5% annual rate
-  let liability = 360000;
-
-  for (let i = 1; i <= 36; i++) {
-    const date = new Date(2024, i - 1, 1);
-    const interestPayment = liability * discountRate;
-    const totalPayment = monthlyRent + cam + insurance + propertyTax;
-    const principalPayment = monthlyRent - interestPayment;
-    liability = Math.max(0, liability - principalPayment);
-
-    let status: PaymentScheduleItem['status'] = 'upcoming';
-    if (i <= 3) status = 'paid';
-    else if (i === 4) status = 'pending';
-
-    payments.push({
-      period: i,
-      date: date.toISOString().split('T')[0],
-      baseRent: monthlyRent,
-      cam,
-      insurance,
-      propertyTax,
-      totalPayment,
-      principalPayment,
-      interestPayment,
-      leaseliabilityBalance: liability,
-      status,
-    });
-  }
-
-  return payments;
-}
-
-
-
-// Helper function to generate sample journal entries
-function generateSampleJournalEntries(): JournalEntry[] {
-  return [
-    {
-      entryId: 'JE-001',
-      date: '2024-01-01',
-      period: 0,
-      description: 'Initial recognition of lease',
-      entryType: 'initial-recognition',
-      reference: 'Lease L-2024-001',
-      lineItems: [
-        {
-          account: 'Right-of-Use Asset',
-          accountCode: '1500',
-          accountType: 'asset',
-          debit: 360000,
-          credit: 0,
-        },
-        {
-          account: 'Lease Liability',
-          accountCode: '2100',
-          accountType: 'liability',
-          debit: 0,
-          credit: 360000,
-        },
-      ],
-    },
-    {
-      entryId: 'JE-002',
-      date: '2024-01-31',
-      period: 1,
-      description: 'Monthly lease payment - Period 1',
-      entryType: 'periodic-payment',
-      reference: 'Lease L-2024-001',
-      lineItems: [
-        {
-          account: 'Lease Liability',
-          accountCode: '2100',
-          accountType: 'liability',
-          debit: 8500,
-          credit: 0,
-        },
-        {
-          account: 'Interest Expense',
-          accountCode: '7200',
-          accountType: 'expense',
-          debit: 1500,
-          credit: 0,
-        },
-        {
-          account: 'Cash',
-          accountCode: '1000',
-          accountType: 'cash',
-          debit: 0,
-          credit: 10000,
-        },
-      ],
-    },
-    {
-      entryId: 'JE-003',
-      date: '2024-01-31',
-      period: 1,
-      description: 'ROU asset depreciation - Period 1',
-      entryType: 'depreciation',
-      reference: 'Lease L-2024-001',
-      lineItems: [
-        {
-          account: 'Depreciation Expense - ROU Asset',
-          accountCode: '7100',
-          accountType: 'expense',
-          debit: 10000,
-          credit: 0,
-        },
-        {
-          account: 'Accumulated Depreciation - ROU Asset',
-          accountCode: '1505',
-          accountType: 'asset',
-          debit: 0,
-          credit: 10000,
-        },
-      ],
-    },
-    {
-      entryId: 'JE-004',
-      date: '2024-02-29',
-      period: 2,
-      description: 'Monthly lease payment - Period 2',
-      entryType: 'periodic-payment',
-      reference: 'Lease L-2024-001',
-      lineItems: [
-        {
-          account: 'Lease Liability',
-          accountCode: '2100',
-          accountType: 'liability',
-          debit: 8535,
-          credit: 0,
-        },
-        {
-          account: 'Interest Expense',
-          accountCode: '7200',
-          accountType: 'expense',
-          debit: 1465,
-          credit: 0,
-        },
-        {
-          account: 'Cash',
-          accountCode: '1000',
-          accountType: 'cash',
-          debit: 0,
-          credit: 10000,
-        },
-      ],
-    },
-    {
-      entryId: 'JE-005',
-      date: '2024-02-29',
-      period: 2,
-      description: 'ROU asset depreciation - Period 2',
-      entryType: 'depreciation',
-      reference: 'Lease L-2024-001',
-      lineItems: [
-        {
-          account: 'Depreciation Expense - ROU Asset',
-          accountCode: '7100',
-          accountType: 'expense',
-          debit: 10000,
-          credit: 0,
-        },
-        {
-          account: 'Accumulated Depreciation - ROU Asset',
-          accountCode: '1505',
-          accountType: 'asset',
-          debit: 0,
-          credit: 10000,
-        },
-      ],
-    },
-  ];
-}

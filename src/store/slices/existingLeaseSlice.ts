@@ -7,7 +7,9 @@ export type ExistingLease = {
   tenantName: string;
   startDate: string;
   endDate: string;
-  // add whatever fields you need
+  classification?: 'finance' | 'operating';
+  // allow any additional API fields
+  [key: string]: unknown;
 };
 
 type ExistingLeaseState = {

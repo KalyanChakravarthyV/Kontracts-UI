@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
@@ -53,22 +53,24 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
   const [escalationValue, setEscalationValue] = useState('');
   const [escalationFrequency, setEscalationFrequency] = useState('annually');
 
-  // Reset form when dialog opens with default values
+  // Reset form only when dialog transitions from closed → open
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) {
+    if (open && !wasOpen.current) {
       setPaymentType(paymentTypeOptions[0]?.id || '');
-      setPaymentAmount('10000'); // Default amount from API example
-      setFrequency('monthly'); // Default frequency
-      setNumberOfPayments('36'); // Default number of payments
-      setStartDate(''); // User should set this
+      setPaymentAmount('10000');
+      setFrequency('monthly');
+      setNumberOfPayments('36');
+      setStartDate('');
       setUseDuration(false);
-      setDuration('3');
+      setDuration('36');
       setDurationUnit('months');
       setEscalationEnabled(false);
       setEscalationType('percentage');
-      setEscalationValue('');
+      setEscalationValue('10');
       setEscalationFrequency('annually');
     }
+    wasOpen.current = open;
   }, [open, paymentTypeOptions]);
 
   const calculateNumberOfPayments = () => {
@@ -110,7 +112,6 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
 
     if (!amount || !startDate || !paymentType) return;
 
-    // Build the wizard payload based on the mode
     const wizardData: WizardPayload = {
       payment_type_id: paymentType,
       amount: amount,
@@ -118,7 +119,6 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
       start_date: startDate,
     };
 
-    // Add either number_of_payments or duration fields
     if (useDuration) {
       wizardData.duration = parseInt(duration);
       wizardData.duration_unit = durationUnit;
@@ -126,7 +126,6 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
       wizardData.number_of_payments = parseInt(numberOfPayments);
     }
 
-    // Add escalation fields if enabled
     if (escalationEnabled && escalationValue) {
       wizardData.escalation_type = escalationType;
       wizardData.escalation_value = parseFloat(escalationValue);
@@ -144,6 +143,10 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
       return baseValid && escalationValue;
     }
     return baseValid;
+  };
+
+  const handleNumberWheel = (event: React.WheelEvent<HTMLInputElement>) => {
+    event.currentTarget.blur();
   };
 
   return (
@@ -184,6 +187,7 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
                 type="number"
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
+                onWheel={handleNumberWheel}
                 className="pl-7"
                 placeholder="10000"
               />
@@ -238,7 +242,8 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
                   type="number"
                   value={duration}
                   onChange={(e) => setDuration(e.target.value)}
-                  placeholder="3"
+                  onWheel={handleNumberWheel}
+                  placeholder="36"
                 />
               </div>
               <div className="space-y-2">
@@ -262,6 +267,7 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
                 type="number"
                 value={numberOfPayments}
                 onChange={(e) => setNumberOfPayments(e.target.value)}
+                onWheel={handleNumberWheel}
                 placeholder="36"
               />
             </div>
@@ -328,6 +334,7 @@ export function PaymentWizard({ open, onClose, onGenerate, paymentTypeOptions, i
                         type="number"
                         value={escalationValue}
                         onChange={(e) => setEscalationValue(e.target.value)}
+                        onWheel={handleNumberWheel}
                         className="pl-7"
                         placeholder={escalationType === 'percentage' ? '3' : '500'}
                         min="0"
