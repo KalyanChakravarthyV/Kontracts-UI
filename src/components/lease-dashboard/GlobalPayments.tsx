@@ -63,7 +63,8 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
   });
 
   const contractName = (leaseId: string | number) => {
-    const match = contracts.find((c) => String(c.id) === String(leaseId));
+    const contractsList = Array.isArray(contracts) ? contracts : [];
+    const match = contractsList.find((c) => String(c.id) === String(leaseId));
     return match?.lease_name ?? `Lease ${leaseId}`;
   };
 

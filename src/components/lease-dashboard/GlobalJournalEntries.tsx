@@ -32,6 +32,7 @@ interface GlobalJournalEntriesProps {
   totalCount?: number;
   currency?: string;
   contracts?: Array<{ id: string | number; lease_name: string }>;
+  onRowClick?: (leaseId: string) => void;
 }
 
 function SortIcon({ field, sortBy, sortOrder }: { field: string; sortBy: string; sortOrder: SortOrder }) {
@@ -58,7 +59,7 @@ const YEAR_OPTIONS = [
   { value: '2028', label: '2028' },
 ];
 
-export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts = [] }: GlobalJournalEntriesProps) {
+export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts = [], onRowClick }: GlobalJournalEntriesProps) {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<SortField>('lease_id');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
@@ -241,8 +242,12 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                           </TableCell>
                         </TableRow>
                         {rows.map((entry) => (
-                          <TableRow key={entry.id}>
-                            <TableCell className="font-medium whitespace-nowrap">{contractName(entry.lease_id)}</TableCell>
+                          <TableRow 
+                            key={entry.id} 
+                            className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
+                            onClick={() => onRowClick?.(String(entry.lease_id))}
+                          >
+                            <TableCell className="font-medium whitespace-nowrap text-blue-600 hover:underline">{contractName(entry.lease_id)}</TableCell>
                             <TableCell className="whitespace-nowrap">{new Date(entry.entry_date).toLocaleDateString()}</TableCell>
                             <TableCell>
                               <Badge variant={ENTRY_TYPE_CONFIG[entry.entry_type]?.variant ?? 'outline'}>
@@ -264,8 +269,12 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                     ))
                   ) : (
                     sortedEntries.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">{contractName(entry.lease_id)}</TableCell>
+                      <TableRow 
+                        key={entry.id} 
+                        className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
+                        onClick={() => onRowClick?.(String(entry.lease_id))}
+                      >
+                        <TableCell className="font-medium whitespace-nowrap text-blue-600 hover:underline">{contractName(entry.lease_id)}</TableCell>
                         <TableCell className="whitespace-nowrap">{new Date(entry.entry_date).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Badge variant={ENTRY_TYPE_CONFIG[entry.entry_type]?.variant ?? 'outline'}>

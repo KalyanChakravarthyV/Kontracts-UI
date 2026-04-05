@@ -320,7 +320,11 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
           ))}
         </div>
 
-        <GlobalJournalEntries totalCount={summary?.entry_count} contracts={contracts} />
+        <GlobalJournalEntries 
+          totalCount={summary?.entry_count} 
+          contracts={contracts} 
+          onRowClick={handleDisplayCreateLeaseform}
+        />
       </div>
     );
   }
