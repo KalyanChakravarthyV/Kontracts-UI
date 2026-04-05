@@ -296,39 +296,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
     return (
       <div className='space-y-6'>
-        {/* Summary — row 1: totals by entry type */}
-        <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-          <div className='bg-accent/50 rounded-lg p-4'>
-            <p className='text-sm text-muted-foreground'>Total Amount</p>
-            <p className='text-2xl font-bold mt-1'>{fmt(summary?.total_amount)}</p>
-            <p className='text-xs text-muted-foreground mt-1'>
-              {summary?.entry_count?.toLocaleString() ?? '—'} entries · {summary?.lease_count ?? '—'} leases
-            </p>
-          </div>
-          <div className='bg-blue-50 rounded-lg p-4'>
-            <p className='text-sm text-blue-700'>Commencement</p>
-            <p className='text-2xl font-bold text-blue-700 mt-1'>{fmt(summary?.by_entry_type?.commencement?.total_amount)}</p>
-            <p className='text-xs text-blue-600 mt-1'>
-              {summary?.by_entry_type?.commencement?.count?.toLocaleString() ?? '—'} entries
-            </p>
-          </div>
-          <div className='bg-accent/50 rounded-lg p-4'>
-            <p className='text-sm text-muted-foreground'>Amortization</p>
-            <p className='text-2xl font-bold mt-1'>{fmt(summary?.by_entry_type?.amortization?.total_amount)}</p>
-            <p className='text-xs text-muted-foreground mt-1'>
-              {summary?.by_entry_type?.amortization?.count?.toLocaleString() ?? '—'} entries
-            </p>
-          </div>
-          <div className='bg-green-50 rounded-lg p-4'>
-            <p className='text-sm text-green-700'>Payment</p>
-            <p className='text-2xl font-bold text-green-700 mt-1'>{fmt(summary?.by_entry_type?.payment?.total_amount)}</p>
-            <p className='text-xs text-green-600 mt-1'>
-              {summary?.by_entry_type?.payment?.count?.toLocaleString() ?? '—'} entries
-            </p>
-          </div>
-        </div>
-
-        {/* Summary — row 2: by account */}
+        {/* Summary — by account */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
           {[
             { key: 'rou_asset', label: 'ROU Asset', color: 'text-purple-700', bg: 'bg-purple-50' },
