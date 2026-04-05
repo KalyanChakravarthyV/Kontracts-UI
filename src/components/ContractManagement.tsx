@@ -67,10 +67,11 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   }, [createdLeaseId, queryClient]);
 
   // Pagination calculations
-  const totalPages = contracts ? Math.ceil(contracts.length / itemsPerPage) : 0;
+  const contractsList = Array.isArray(contracts) ? contracts : [];
+  const totalPages = Math.ceil(contractsList.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedContracts = contracts ? contracts.slice(startIndex, endIndex) : [];
+  const paginatedContracts = contractsList.slice(startIndex, endIndex);
 
   // Pagination handlers
   const handlePreviousPage = () => {
