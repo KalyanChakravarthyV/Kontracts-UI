@@ -376,7 +376,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
             <div className="flex items-center justify-center py-20">
               <div className="flex flex-col items-center gap-4">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                <p className="text-muted-foreground">Loading lease details...</p>
+                <p className="text-primary font-medium text-lg">Gathering the details...</p>
+                <p className="text-muted-foreground text-sm">Preparing lease information</p>
               </div>
             </div>
           ) : (
@@ -435,15 +436,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
           {activeTab === 'contracts' && (
             <div className='overflow-x-auto'>
               {contractsLoading ? (
-                <div className='space-y-4'>
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className='animate-pulse flex items-center space-x-4 py-4'>
-                      <div className='h-4 bg-muted rounded flex-1'></div>
-                      <div className='h-4 bg-muted rounded w-20'></div>
-                      <div className='h-4 bg-muted rounded w-24'></div>
-                      <div className='h-4 bg-muted rounded w-16'></div>
-                    </div>
-                  ))}
+                <div className='py-16 flex flex-col items-center justify-center'>
+                  <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4'></div>
+                  <p className='text-primary font-medium text-lg'>Crunching the numbers...</p>
+                  <p className='text-muted-foreground text-sm mt-1'>Fetching contract data</p>
                 </div>
               ) : (
                 <div>

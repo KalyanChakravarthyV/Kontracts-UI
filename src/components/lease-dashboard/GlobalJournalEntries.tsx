@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/lease-dashboard/ui/table';
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
-import { FileText, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useAuthToken } from '@/hooks/use-auth-token';
 import { API_BASE_URL } from '@/config/api';
 import type { JournalEntryResponse, JournalEntryType, LeaseAccount } from './JournalEntries';
@@ -198,7 +198,11 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="py-12 text-center text-muted-foreground">Loading entries...</div>
+          <div className="py-16 flex flex-col items-center justify-center">
+            <Loader2 className="size-10 animate-spin text-primary mb-4" />
+            <p className="text-primary font-medium text-lg">Balancing the books...</p>
+            <p className="text-muted-foreground text-sm mt-1">Preparing journal entries</p>
+          </div>
         ) : entries.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <FileText className="size-10 mx-auto mb-3 opacity-30" />
