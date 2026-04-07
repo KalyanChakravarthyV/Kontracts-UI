@@ -300,37 +300,45 @@ const handleChange = (field: string, value: any) => {
             )}
           </CardHeader>
 
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {section.fields.map((field) => (
-              <div
-                key={field.id}
-                className={`space-y-2 ${field.type === "textarea" ? "md:col-span-2" : ""
-                  }`}
-              >
-                {field.type === "checkbox" ? (
-                  <label className="flex items-center space-x-2">
+          <CardContent className="space-y-6">
+            {/* Non-checkbox fields in grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              {section.fields.filter(f => f.type !== "checkbox").map((field) => (
+                <div
+                  key={field.id}
+                  className={`space-y-2 ${field.type === "textarea" ? "md:col-span-2" : ""}`}
+                >
+                  <Label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 text-lg font-bold ml-1">*</span>}
+                  </Label>
+                  {renderField(field)}
+                </div>
+              ))}
+            </div>
+            
+            {/* Checkbox fields grouped together */}
+            {section.fields.filter(f => f.type === "checkbox").length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {section.fields.filter(f => f.type === "checkbox").map((field) => (
+                  <label 
+                    key={field.id}
+                    className="flex items-center space-x-3 cursor-pointer"
+                  >
                     <Checkbox
                       checked={!!formData[field.id]}
                       onCheckedChange={(v) => handleChange(field.id, v)}
                     />
-                    <span>
+                    <span className="text-sm font-medium text-gray-700">
                       {field.label}
                       {field.required && (
-                         <span className="text-red-500 text-lg ml-0.5">*</span>
+                        <span className="text-red-500 text-lg ml-0.5">*</span>
                       )}
                     </span>
                   </label>
-                ) : (
-                  <>
-                    <Label>
-                      {field.label}
-                      {field.required && <span className="text-red-500 text-lg font-bold ml-1">*</span>}
-                    </Label>
-                    {renderField(field)}
-                  </>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </CardContent>
 
         </Card>
