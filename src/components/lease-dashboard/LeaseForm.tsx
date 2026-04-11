@@ -64,9 +64,10 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   const [currencies, setCurrencies] = useState<Array<{ code: string; name: string }>>([]);
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [errorFieldIds, setErrorFieldIds] = useState<Set<string>>(new Set());
   const { getToken: getAccessTokenSilently } = useAuthToken();
 
-  // Fetch currencies from API first
+  // Fetch currencies from API first - runs only once on mount
   useEffect(() => {
     const fetchCurrencies = async () => {
       try {
@@ -97,7 +98,8 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
     };
 
     fetchCurrencies();
-  }, [getAccessTokenSilently]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Only populate form data after currencies are loaded
   useEffect(() => {
@@ -110,8 +112,9 @@ const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const validateForm = (): { isValid: boolean; errors: string[] } => {
+  const validateForm = (): { isValid: boolean; errors: string[]; errorIds: string[] } => {
     const errors: string[] = [];
+    const errorIds: string[] = [];
 
     // Check all required fields
     createLeaseFormFields.forEach((section) => {
@@ -120,6 +123,7 @@ const handleChange = (field: string, value: any) => {
           const value = formData[field.id];
           if (!value || (typeof value === 'string' && !value.trim())) {
             errors.push(field.label);
+            errorIds.push(field.id);
           }
         }
       });
@@ -138,7 +142,7 @@ const handleChange = (field: string, value: any) => {
       }
     }
 
-    return { isValid: errors.length === 0, errors };
+    return { isValid: errors.length === 0, errors, errorIds };
   };
 
   const handleSubmit = async(e: React.FormEvent) => {
@@ -150,16 +154,37 @@ const handleChange = (field: string, value: any) => {
     if (!validation.isValid) {
       // Show validation errors in alert component
       setValidationErrors(validation.errors);
+      setErrorFieldIds(new Set(validation.errorIds));
       return;
     }
     
     // Clear any previous validation errors
     setValidationErrors([]);
-    onSubmit?.(formData);    
+    setErrorFieldIds(new Set());
+    
+    // Convert empty date strings to null for API compatibility
+    const dateFieldIds = new Set<string>();
+    createLeaseFormFields.forEach((section) => {
+      section.fields.forEach((field) => {
+        if (field.type === 'date') {
+          dateFieldIds.add(field.id);
+        }
+      });
+    });
+    
+    const processedFormData = { ...formData };
+    Object.keys(processedFormData).forEach((key) => {
+      if (dateFieldIds.has(key) && processedFormData[key] === '') {
+        processedFormData[key] = null;
+      }
+    });
+    
+    onSubmit?.(processedFormData);    
   };
 
   const renderField = (field: FieldConfig) => {
     const fieldValue = formData[field.id];
+    const hasError = errorFieldIds.has(field.id);
     
     // For text inputs, ensure we only pass string/number values
     const getInputValue = () => {
@@ -167,15 +192,18 @@ const handleChange = (field: string, value: any) => {
       return fieldValue?.toString() || '';
     };
 
+    const errorClassName = hasError ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : '';
+
     const commonProps = {
       value: getInputValue(),
       onChange: (e: any) => handleChange(field.id, e.target.value),
+      className: errorClassName,
     };
 
     switch (field.type) {
       case "textarea":
         return (
-          <Textarea {...commonProps} />
+          <Textarea {...commonProps} className={errorClassName} />
         );
 
       case "select":
@@ -186,7 +214,7 @@ const handleChange = (field: string, value: any) => {
               value={formData[field.id]?.toString() || ""}
               onValueChange={(v) => handleChange(field.id, v)}
             >
-              <SelectTrigger>
+              <SelectTrigger className={errorClassName}>
                 <SelectValue placeholder={`Select ${field.label}`} />
               </SelectTrigger>
               <SelectContent className="max-h-[300px] overflow-y-auto">
@@ -206,7 +234,7 @@ const handleChange = (field: string, value: any) => {
             value={formData[field.id]?.toString() || ""}
             onValueChange={(v) => handleChange(field.id, v)}
           >
-            <SelectTrigger>
+            <SelectTrigger className={errorClassName}>
               <SelectValue placeholder={`Select ${field.label}`} />
             </SelectTrigger>
             <SelectContent className="max-h-[700px] overflow-y-auto">
@@ -272,37 +300,45 @@ const handleChange = (field: string, value: any) => {
             )}
           </CardHeader>
 
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {section.fields.map((field) => (
-              <div
-                key={field.id}
-                className={`space-y-2 ${field.type === "textarea" ? "md:col-span-2" : ""
-                  }`}
-              >
-                {field.type === "checkbox" ? (
-                  <label className="flex items-center space-x-2">
+          <CardContent className="space-y-6">
+            {/* Non-checkbox fields in grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              {section.fields.filter(f => f.type !== "checkbox").map((field) => (
+                <div
+                  key={field.id}
+                  className={`space-y-2 ${field.type === "textarea" ? "md:col-span-2" : ""}`}
+                >
+                  <Label className="text-sm font-medium text-gray-700">
+                    {field.label}
+                    {field.required && <span className="text-red-500 text-lg font-bold ml-1">*</span>}
+                  </Label>
+                  {renderField(field)}
+                </div>
+              ))}
+            </div>
+            
+            {/* Checkbox fields grouped together */}
+            {section.fields.filter(f => f.type === "checkbox").length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                {section.fields.filter(f => f.type === "checkbox").map((field) => (
+                  <label 
+                    key={field.id}
+                    className="flex items-center space-x-3 cursor-pointer"
+                  >
                     <Checkbox
                       checked={!!formData[field.id]}
                       onCheckedChange={(v) => handleChange(field.id, v)}
                     />
-                    <span>
+                    <span className="text-sm font-medium text-gray-700">
                       {field.label}
                       {field.required && (
-                         <span className="text-red-500 text-lg ml-0.5">*</span>
+                        <span className="text-red-500 text-lg ml-0.5">*</span>
                       )}
                     </span>
                   </label>
-                ) : (
-                  <>
-                    <Label>
-                      {field.label}
-                      {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    {renderField(field)}
-                  </>
-                )}
+                ))}
               </div>
-            ))}
+            )}
           </CardContent>
 
         </Card>

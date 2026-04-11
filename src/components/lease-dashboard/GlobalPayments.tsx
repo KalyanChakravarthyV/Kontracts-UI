@@ -63,7 +63,8 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
   });
 
   const contractName = (leaseId: string | number) => {
-    const match = contracts.find((c) => String(c.id) === String(leaseId));
+    const contractsList = Array.isArray(contracts) ? contracts : [];
+    const match = contractsList.find((c) => String(c.id) === String(leaseId));
     return match?.lease_name ?? `Lease ${leaseId}`;
   };
 
@@ -127,7 +128,11 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="py-12 text-center text-muted-foreground">Loading payments...</div>
+          <div className="py-16 flex flex-col items-center justify-center">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4"></div>
+            <p className="text-primary font-medium text-lg">Counting the coins...</p>
+            <p className="text-muted-foreground text-sm mt-1">Retrieving payment records</p>
+          </div>
         ) : payments.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <DollarSign className="size-10 mx-auto mb-3 opacity-30" />

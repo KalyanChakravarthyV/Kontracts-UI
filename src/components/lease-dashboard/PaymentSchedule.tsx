@@ -5,12 +5,20 @@ import { Button } from '@/components/lease-dashboard/ui/button';
 import { Input } from '@/components/lease-dashboard/ui/input';
 import { DollarSign, TrendingUp, Calendar, Plus, Save, X, Edit2, Check, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { PaymentWizard } from '@/components/lease-dashboard/PaymentWizard';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthToken } from '@/hooks/use-auth-token';
 import AppAlert from '@/components/common/AppAlert';
 import { API_BASE_URL } from '@/config/api';
 import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setSuccessMessage, setErrorMessage } from '@/store/slices/alertMessageSlice';
+
+// Cache for payment type options - persists across component remounts
+let cachedPaymentTypeOptions: Array<{
+  id: string;
+  name: string;
+  charge_category: string;
+  description: string;
+}> | null = null;
 
 // API Response type
 export interface PaymentApiResponse {
@@ -76,6 +84,11 @@ export function PaymentSchedule({
   // State for adding new rows
   const [isAddingRow, setIsAddingRow] = useState(false);
   const [payments, setPayments] = useState<PaymentScheduleItem[]>([]);
+  
+  // State for infinite scroll
+  const [visibleCount, setVisibleCount] = useState(50);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [alertMessage, setAlertMessage] = useState('')
   const lastInputRef = useRef<HTMLInputElement | null>(null);
@@ -130,11 +143,50 @@ export function PaymentSchedule({
   });
   
   useEffect(()=>{
-    setPayments(paymentsList)
+    setPayments(paymentsList);
+    setVisibleCount(50); // Reset visible count when payments list changes
   },[paymentsList])
 
-  // Fetch payment type options
+  // Infinite scroll handler
+  const handleScroll = useCallback(() => {
+    if (!tableContainerRef.current || isLoadingMore) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = tableContainerRef.current;
+    
+    // Load more when user scrolls near the bottom (within 100px)
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      if (visibleCount < payments.length) {
+        setIsLoadingMore(true);
+        // Simulate a small delay for loading indicator visibility
+        setTimeout(() => {
+          setVisibleCount(prev => Math.min(prev + 50, payments.length));
+          setIsLoadingMore(false);
+        }, 300);
+      }
+    }
+  }, [isLoadingMore, visibleCount, payments.length]);
+
+  // Attach scroll listener
   useEffect(() => {
+    const container = tableContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
+
+  // Get visible payments for rendering
+  const visiblePayments = payments.slice(0, visibleCount);
+
+  // Fetch payment type options - use cache if available, refetch only when contractId changes
+  useEffect(() => {
+    // If we have cached options, use them immediately
+    if (cachedPaymentTypeOptions && cachedPaymentTypeOptions.length > 0) {
+      setPaymentTypeOptions(cachedPaymentTypeOptions);
+      setNewRow(prev => ({ ...prev, payment_type_id: cachedPaymentTypeOptions![0].id }));
+      return;
+    }
+
     const fetchPaymentTypeOptions = async () => {
       try {
         const accessToken = await getAccessTokenSilently();
@@ -147,6 +199,8 @@ export function PaymentSchedule({
         });
         const data = await response.json();
         if (data.payment_types && data.payment_types.length > 0) {
+          // Cache the options
+          cachedPaymentTypeOptions = data.payment_types;
           setPaymentTypeOptions(data.payment_types);
           // Set default payment type to first option's id
           setNewRow(prev => ({ ...prev, payment_type_id: data.payment_types[0].id }));
@@ -157,9 +211,10 @@ export function PaymentSchedule({
     };
 
     fetchPaymentTypeOptions();
-  }, [getAccessTokenSilently]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractId]);
 
-  // Fetch payment summary
+  // Fetch payment summary - runs when contractId changes
   useEffect(() => {
     const getPaymentSummary = async () => {
       if (!contractId) return;
@@ -182,7 +237,8 @@ export function PaymentSchedule({
     };
 
     getPaymentSummary();
-  }, [contractId, getAccessTokenSilently])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractId])
 
 useEffect(() => {
   if (isAddingRow && lastInputRef.current) {
@@ -214,7 +270,10 @@ useEffect(() => {
   const formatPaymentType = (paymentTypeId: string) => {
     // Find the matching option by id from the fetched payment types
     const option = paymentTypeOptions.find(opt => opt.id === paymentTypeId);
-    return option ? option.name : paymentTypeId;
+    // Return name if found, or show loading indicator if options not loaded yet, never show ID
+    if (option) return option.name;
+    if (paymentTypeOptions.length === 0) return '...';
+    return paymentTypeId; // Fallback only if options loaded but ID not found
   };
 
 
@@ -807,7 +866,10 @@ const getStatusBadge = (status: string) => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          <div 
+            ref={tableContainerRef}
+            className="overflow-x-auto max-h-[600px] overflow-y-auto"
+          >
             <Table>
               <TableHeader>
                 <TableRow>
@@ -821,7 +883,7 @@ const getStatusBadge = (status: string) => {
                   </TableHead>
                   <TableHead className="w-16">Period</TableHead>
                   <TableHead className="w-32">Due Date</TableHead>
-                  <TableHead className="w-48">Type</TableHead>
+                  <TableHead className="w-28">Type</TableHead>
                   <TableHead className="w-28 text-right">Amount</TableHead>
                   <TableHead className="w-28">Status</TableHead>
                   <TableHead className="w-32">Paid Date</TableHead>
@@ -829,7 +891,7 @@ const getStatusBadge = (status: string) => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {payments.map((payment, index) => {
+                {visiblePayments.map((payment, index) => {
                   const isEditing = editingRowIndex === index;
                   const displayRow = isEditing && editingRow ? editingRow : payment;
                   
@@ -1055,6 +1117,19 @@ const getStatusBadge = (status: string) => {
                 )}
               </TableBody>
             </Table>
+            {/* Loading indicator for infinite scroll */}
+            {isLoadingMore && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="size-5 animate-spin text-muted-foreground mr-2" />
+                <span className="text-sm text-muted-foreground">Loading more payments...</span>
+              </div>
+            )}
+            {/* Show count indicator */}
+            {payments.length > 0 && (
+              <div className="text-center py-2 text-xs text-muted-foreground">
+                Showing {Math.min(visibleCount, payments.length)} of {payments.length} payments
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -21,6 +21,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const [activeTab, setActiveTab] = useState(initialTab);
   const [openLeaseModal, setOpenLeaseModal] = useState(false);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>('');
+  const [isLoadingLeaseDetails, setIsLoadingLeaseDetails] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,10 +68,11 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   }, [createdLeaseId, queryClient]);
 
   // Pagination calculations
-  const totalPages = contracts ? Math.ceil(contracts.length / itemsPerPage) : 0;
+  const contractsList = Array.isArray(contracts) ? contracts : [];
+  const totalPages = Math.ceil(contractsList.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedContracts = contracts ? contracts.slice(startIndex, endIndex) : [];
+  const paginatedContracts = contractsList.slice(startIndex, endIndex);
 
   // Pagination handlers
   const handlePreviousPage = () => {
@@ -275,7 +277,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
 
   // Journal Entries View Component
-  function JournalEntriesView({ contracts }: { contracts: any[] }) {
+  function JournalEntriesView({ contracts, onRowClick }: { contracts: any[]; onRowClick?: (leaseId: string) => void }) {
     const { getToken } = useAuthToken();
 
     const { data: summary } = useQuery({
@@ -295,39 +297,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
     return (
       <div className='space-y-6'>
-        {/* Summary — row 1: totals by entry type */}
-        <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-          <div className='bg-accent/50 rounded-lg p-4'>
-            <p className='text-sm text-muted-foreground'>Total Amount</p>
-            <p className='text-2xl font-bold mt-1'>{fmt(summary?.total_amount)}</p>
-            <p className='text-xs text-muted-foreground mt-1'>
-              {summary?.entry_count?.toLocaleString() ?? '—'} entries · {summary?.lease_count ?? '—'} leases
-            </p>
-          </div>
-          <div className='bg-blue-50 rounded-lg p-4'>
-            <p className='text-sm text-blue-700'>Commencement</p>
-            <p className='text-2xl font-bold text-blue-700 mt-1'>{fmt(summary?.by_entry_type?.commencement?.total_amount)}</p>
-            <p className='text-xs text-blue-600 mt-1'>
-              {summary?.by_entry_type?.commencement?.count?.toLocaleString() ?? '—'} entries
-            </p>
-          </div>
-          <div className='bg-accent/50 rounded-lg p-4'>
-            <p className='text-sm text-muted-foreground'>Amortization</p>
-            <p className='text-2xl font-bold mt-1'>{fmt(summary?.by_entry_type?.amortization?.total_amount)}</p>
-            <p className='text-xs text-muted-foreground mt-1'>
-              {summary?.by_entry_type?.amortization?.count?.toLocaleString() ?? '—'} entries
-            </p>
-          </div>
-          <div className='bg-green-50 rounded-lg p-4'>
-            <p className='text-sm text-green-700'>Payment</p>
-            <p className='text-2xl font-bold text-green-700 mt-1'>{fmt(summary?.by_entry_type?.payment?.total_amount)}</p>
-            <p className='text-xs text-green-600 mt-1'>
-              {summary?.by_entry_type?.payment?.count?.toLocaleString() ?? '—'} entries
-            </p>
-          </div>
-        </div>
-
-        {/* Summary — row 2: by account */}
+        {/* Summary — by account */}
         <div className='grid grid-cols-2 md:grid-cols-4 gap-4'>
           {[
             { key: 'rou_asset', label: 'ROU Asset', color: 'text-purple-700', bg: 'bg-purple-50' },
@@ -351,11 +321,16 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
           ))}
         </div>
 
-        <GlobalJournalEntries totalCount={summary?.entry_count} contracts={contracts} />
+        <GlobalJournalEntries 
+          totalCount={summary?.entry_count} 
+          contracts={contracts} 
+          onRowClick={onRowClick}
+        />
       </div>
     );
   }
   const fetchExistingLeaseDetails = async (contractId: string) => {
+    setIsLoadingLeaseDetails(true);
     try {
       const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
@@ -374,6 +349,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       console.log("fetched existingLease data successfully", response.data);
     } catch (error) {
       console.error("Error creating lease", error);
+    } finally {
+      setIsLoadingLeaseDetails(false);
     }
   }
   const handleDisplayCreateLeaseform = (leaseId?: string) => {
@@ -389,6 +366,25 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   console.log("Selected lease id", selectedLeaseId)
   return (
     <>
+      {/* Lease Details Dialog - available for all tabs */}
+      {openLeaseModal && (
+        <LeaseModal
+          open={openLeaseModal}
+          onOpenChange={setOpenLeaseModal}
+        >
+          {isLoadingLeaseDetails ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="flex flex-col items-center gap-4">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                <p className="text-primary font-medium text-lg">Gathering the details...</p>
+                <p className="text-muted-foreground text-sm">Preparing lease information</p>
+              </div>
+            </div>
+          ) : (
+            <LeaseDetails contractId={parseInt(selectedLeaseId) || Number(createdLeaseId) || 0} />
+          )}
+        </LeaseModal>
+      )}
       <AlertMessage />
       <div className='mt-8 bg-card rounded-lg border border-border shadow-sm'>
         <div className='p-6 border-b border-border'>
@@ -440,15 +436,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
           {activeTab === 'contracts' && (
             <div className='overflow-x-auto'>
               {contractsLoading ? (
-                <div className='space-y-4'>
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className='animate-pulse flex items-center space-x-4 py-4'>
-                      <div className='h-4 bg-muted rounded flex-1'></div>
-                      <div className='h-4 bg-muted rounded w-20'></div>
-                      <div className='h-4 bg-muted rounded w-24'></div>
-                      <div className='h-4 bg-muted rounded w-16'></div>
-                    </div>
-                  ))}
+                <div className='py-16 flex flex-col items-center justify-center'>
+                  <div className='animate-spin rounded-full h-10 w-10 border-b-2 border-primary mb-4'></div>
+                  <p className='text-primary font-medium text-lg'>Crunching the numbers...</p>
+                  <p className='text-muted-foreground text-sm mt-1'>Fetching contract data</p>
                 </div>
               ) : (
                 <div>
@@ -462,15 +453,6 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                       <i className='fas fa-plus mr-2'></i>Create Lease
                     </button>
                   </div>
-                  {openLeaseModal ? <>
-                    {/* Lease Details Dialog */}
-                    <LeaseModal
-                      open={openLeaseModal}
-                      onOpenChange={setOpenLeaseModal}
-                    >
-                      <LeaseDetails contractId={parseInt(selectedLeaseId) || Number(createdLeaseId) || 0} />
-                    </LeaseModal>
-                  </> : ''}
                   <table className='w-full text-sm'>
                     <thead>
                       <tr className='border-b border-border'>
@@ -509,27 +491,24 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                               className='border-b border-border hover:bg-muted/50 transition-colors'
                               data-testid={`contract-row-${contract.id}`}
                             >
-                              <td className='py-4 px-4 cursor-pointer' onClick={() => handleDisplayCreateLeaseform(contract.id)}>
-                                <div>
-                                  <p
-                                    className='font-medium'
-                                    data-testid={`text-contract-name-${contract.id}`}
-                                  >
-                                    {contract.lease_name}
-                                  </p>
-                                  <p
-                                    className='text-xs text-muted-foreground'
-                                    data-testid={`text-vendor-${contract.id}`}
-                                  >
-                                    {contract.lessor_name}
-                                  </p>
-                                </div>
+                              <td 
+                                className='py-4 px-4 cursor-pointer max-w-[280px]' 
+                                onClick={() => handleDisplayCreateLeaseform(contract.id)}
+                                title={contract.lease_name}
+                              >
+                                <p
+                                  className='font-medium truncate'
+                                  data-testid={`text-contract-name-${contract.id}`}
+                                >
+                                  {contract.lease_name}
+                                </p>
                               </td>
                               <td
-                                className='py-4 px-4 text-muted-foreground'
+                                className='py-4 px-4 text-muted-foreground max-w-[200px]'
                                 data-testid={`text-lessee-${contract.id}`}
+                                title={contract.lessee_name || 'N/A'}
                               >
-                                {contract.lessee_name || 'N/A'}
+                                <span className='block truncate'>{contract.lessee_name || 'N/A'}</span>
                               </td>
                               <td className='py-4 px-4'>
                                 <span
@@ -660,7 +639,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
           {/* Journal Entries Tab */}
           {activeTab === 'journal' && (
-            <JournalEntriesView contracts={contracts} />
+            <JournalEntriesView contracts={contracts} onRowClick={handleDisplayCreateLeaseform} />
           )}
         </div>
       </div>

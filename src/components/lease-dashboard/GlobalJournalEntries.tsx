@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/lease-dashboard/ui/table';
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
-import { FileText, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useAuthToken } from '@/hooks/use-auth-token';
 import { API_BASE_URL } from '@/config/api';
 import type { JournalEntryResponse, JournalEntryType, LeaseAccount } from './JournalEntries';
@@ -32,6 +32,7 @@ interface GlobalJournalEntriesProps {
   totalCount?: number;
   currency?: string;
   contracts?: Array<{ id: string | number; lease_name: string }>;
+  onRowClick?: (leaseId: string) => void;
 }
 
 function SortIcon({ field, sortBy, sortOrder }: { field: string; sortBy: string; sortOrder: SortOrder }) {
@@ -49,11 +50,21 @@ const GROUP_OPTIONS: { value: GroupField; label: string }[] = [
   { value: 'credit_account', label: 'Credit Account' },
 ];
 
-export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts = [] }: GlobalJournalEntriesProps) {
+const YEAR_OPTIONS = [
+  { value: '', label: 'All Years' },
+  { value: '2024', label: '2024' },
+  { value: '2025', label: '2025' },
+  { value: '2026', label: '2026' },
+  { value: '2027', label: '2027' },
+  { value: '2028', label: '2028' },
+];
+
+export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts = [], onRowClick }: GlobalJournalEntriesProps) {
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<SortField>('lease_id');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [groupBy, setGroupBy] = useState<GroupField>(null);
+  const [yearFilter, setYearFilter] = useState<string>('');
   const { getToken } = useAuthToken();
 
   const skip = (page - 1) * PAGE_SIZE;
@@ -73,7 +84,8 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
   });
 
   const contractName = (leaseId: number) => {
-    const match = contracts.find((c) => String(c.id) === String(leaseId));
+    const contractsList = Array.isArray(contracts) ? contracts : [];
+    const match = contractsList.find((c) => String(c.id) === String(leaseId));
     return match?.lease_name ?? `Lease ${leaseId}`;
   };
 
@@ -103,8 +115,16 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
     }
   };
 
+  const filteredEntries = useMemo(() => {
+    if (!yearFilter) return entries;
+    return entries.filter((entry) => {
+      const entryYear = entry.entry_date?.substring(0, 4);
+      return entryYear === yearFilter;
+    });
+  }, [entries, yearFilter]);
+
   const sortedEntries = useMemo(() => {
-    return [...entries].sort((a, b) => {
+    return [...filteredEntries].sort((a, b) => {
       const va = getSortValue(a, sortBy);
       const vb = getSortValue(b, sortBy);
       let cmp = 0;
@@ -115,7 +135,7 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
       }
       return sortOrder === 'asc' ? cmp : -cmp;
     });
-  }, [entries, sortBy, sortOrder]);
+  }, [filteredEntries, sortBy, sortOrder]);
 
   const getGroupKey = (entry: JournalEntryResponse): string => {
     if (!groupBy) return '';
@@ -148,23 +168,41 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
             <CardTitle>Entries</CardTitle>
             <CardDescription>All journal entries across leases</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Group by</span>
-            <select
-              value={groupBy ?? ''}
-              onChange={(e) => setGroupBy((e.target.value || null) as GroupField)}
-              className="text-sm border border-border rounded-md px-2 py-1 bg-background"
-            >
-              {GROUP_OPTIONS.map((o) => (
-                <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Year</span>
+              <select
+                value={yearFilter}
+                onChange={(e) => setYearFilter(e.target.value)}
+                className="text-sm border border-border rounded-md px-2 py-1 bg-background"
+              >
+                {YEAR_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Group by</span>
+              <select
+                value={groupBy ?? ''}
+                onChange={(e) => setGroupBy((e.target.value || null) as GroupField)}
+                className="text-sm border border-border rounded-md px-2 py-1 bg-background"
+              >
+                {GROUP_OPTIONS.map((o) => (
+                  <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="py-12 text-center text-muted-foreground">Loading entries...</div>
+          <div className="py-16 flex flex-col items-center justify-center">
+            <Loader2 className="size-10 animate-spin text-primary mb-4" />
+            <p className="text-primary font-medium text-lg">Balancing the books...</p>
+            <p className="text-muted-foreground text-sm mt-1">Preparing journal entries</p>
+          </div>
         ) : entries.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <FileText className="size-10 mx-auto mb-3 opacity-30" />
@@ -208,8 +246,12 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                           </TableCell>
                         </TableRow>
                         {rows.map((entry) => (
-                          <TableRow key={entry.id}>
-                            <TableCell className="font-medium whitespace-nowrap">{contractName(entry.lease_id)}</TableCell>
+                          <TableRow 
+                            key={entry.id} 
+                            className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
+                            onClick={() => onRowClick?.(String(entry.lease_id))}
+                          >
+                            <TableCell className="font-medium whitespace-nowrap text-blue-600 hover:underline">{contractName(entry.lease_id)}</TableCell>
                             <TableCell className="whitespace-nowrap">{new Date(entry.entry_date).toLocaleDateString()}</TableCell>
                             <TableCell>
                               <Badge variant={ENTRY_TYPE_CONFIG[entry.entry_type]?.variant ?? 'outline'}>
@@ -231,8 +273,12 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                     ))
                   ) : (
                     sortedEntries.map((entry) => (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-medium whitespace-nowrap">{contractName(entry.lease_id)}</TableCell>
+                      <TableRow 
+                        key={entry.id} 
+                        className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
+                        onClick={() => onRowClick?.(String(entry.lease_id))}
+                      >
+                        <TableCell className="font-medium whitespace-nowrap text-blue-600 hover:underline">{contractName(entry.lease_id)}</TableCell>
                         <TableCell className="whitespace-nowrap">{new Date(entry.entry_date).toLocaleDateString()}</TableCell>
                         <TableCell>
                           <Badge variant={ENTRY_TYPE_CONFIG[entry.entry_type]?.variant ?? 'outline'}>
