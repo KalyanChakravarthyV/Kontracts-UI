@@ -17,7 +17,7 @@ export default function JournalEntriesPage() {
               <p className="text-muted-foreground">View and manage automated journal entries for your contracts</p>
             </div>
             {/* Pass initial tab to show journal entries */}
-            <ContractManagement initialTab="journals" />
+            <ContractManagement initialTab="journal" />
           </div>
         </main>
       </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import axios from "axios";
@@ -11,38 +11,49 @@ import { useAppSelector, useAppDispatch } from '@/store/hooks';
 import { setExistingLease, clearExistingLease } from '@/store/slices/existingLeaseSlice';
 import { AlertMessage } from '@/components/common/AlertMessage';
 import { API_BASE_URL } from '@/config/api';
+import { ChevronDown, ChevronRight, ChevronUp, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 
 interface ContractManagementProps {
   initialTab?: string;
 }
 
+type ContractSortField = 'lease_name' | 'status' | 'classification' | 'commencement_date' | 'end_date';
+type ContractSortOrder = 'asc' | 'desc';
+type ContractGroupField = 'classification' | 'status' | 'lessee_name' | null;
+
 export function ContractManagement({ initialTab = 'contracts' }: ContractManagementProps = {}) {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [openLeaseModal, setOpenLeaseModal] = useState(false);
   const [selectedLeaseId, setSelectedLeaseId] = useState<string>('');
   const [isLoadingLeaseDetails, setIsLoadingLeaseDetails] = useState(false);
-  
+
+
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(20);
+  const [itemsPerPage] = useState(500);
+
+  // Grouping and sorting state for contracts
+  const [contractSortBy, setContractSortBy] = useState<ContractSortField>('lease_name');
+  const [contractSortOrder, setContractSortOrder] = useState<ContractSortOrder>('asc');
+  const [contractGroupBy, setContractGroupBy] = useState<ContractGroupField>(null);
+  const [expandedContractGroups, setExpandedContractGroups] = useState<Set<string>>(new Set());
+  const [isLoadingContract, setIsLoadingContract] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const dispatch = useAppDispatch()
-  const { getToken: getAccessTokenSilently } = useAuthToken();
+  const { getHeaders: getAccessTokenSilently } = useAuthToken();
 
   // Get createdLeaseId from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
 
   const getLeasesApi = async () => {
     try {
-      const token = await getAccessTokenSilently();
       const response = await fetch(`${API_BASE_URL}/leases/`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: await getAccessTokenSilently(),
       });
 
       const data = await response.json();
@@ -102,12 +113,11 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       type: string;
       data: any;
     }) => {
-      const accessToken = await getAccessTokenSilently();
       const schedulePath = type === 'IFRS16' ? 'ifrs16' : 'asc842';
       return await axios.post(
         `${API_BASE_URL}/schedules/${schedulePath}/${contractId}`,
         {},
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: await getAccessTokenSilently() }
       );
     },
     onSuccess: () => {
@@ -135,11 +145,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       contractId: string;
       scheduleType: string;
     }) => {
-      const accessToken = await getAccessTokenSilently();
       return await axios.post(
         `${API_BASE_URL}/journal-entries/lease/${contractId}`,
         {},
-        { headers: { Authorization: `Bearer ${accessToken}` } }
+        { headers: await getAccessTokenSilently() }
       );
     },
     onSuccess: () => {
@@ -192,6 +201,78 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
     }
   };
 
+  const handleContractSort = (field: ContractSortField) => {
+    if (field === contractSortBy) {
+      setContractSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setContractSortBy(field);
+      setContractSortOrder('asc');
+    }
+    setCurrentPage(1);
+  };
+
+  const toggleContractGroup = (key: string) => {
+    const newSet = new Set(expandedContractGroups);
+    if (newSet.has(key)) {
+      newSet.delete(key);
+    } else {
+      newSet.add(key);
+    }
+    setExpandedContractGroups(newSet);
+  };
+
+  const toggleAllContractGroups = (show: boolean) => {
+    if (show && contractGroupBy) {
+      const groupedContracts = getGroupedAndSortedContracts();
+      setExpandedContractGroups(new Set(groupedContracts.map(g => g.key)));
+    } else {
+      setExpandedContractGroups(new Set());
+    }
+  };
+
+  const getContractGroupKey = (contract: any): string => {
+    if (!contractGroupBy) return '';
+    if (contractGroupBy === 'classification') {
+      return contract.classification || contract.contract_type || 'N/A';
+    }
+    if (contractGroupBy === 'lessee_name') {
+      return contract.lessee_name || 'N/A';
+    }
+    return String(contract[contractGroupBy] ?? '—');
+  };
+
+  const getGroupedAndSortedContracts = () => {
+    if (!contracts) return [];
+
+    // Sort contracts
+    const sorted = [...contracts].sort((a, b) => {
+      let aVal = a[contractSortBy];
+      let bVal = b[contractSortBy];
+
+      if (contractSortBy === 'commencement_date' || contractSortBy === 'end_date') {
+        aVal = aVal ? new Date(aVal).getTime() : 0;
+        bVal = bVal ? new Date(bVal).getTime() : 0;
+      }
+
+      if (aVal < bVal) return contractSortOrder === 'asc' ? -1 : 1;
+      if (aVal > bVal) return contractSortOrder === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    if (!contractGroupBy) return [];
+
+    const grouped: { key: string; rows: any[] }[] = [];
+    const map = new Map<string, any[]>();
+    for (const contract of sorted) {
+      const key = getContractGroupKey(contract);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(contract);
+    }
+    map.forEach((rows, key) => grouped.push({ key, rows }));
+    grouped.sort((a, b) => a.key.localeCompare(b.key));
+    return grouped;
+  };
+
   const tabs = [
     { id: 'contracts', label: 'Active Contracts' },
     { id: 'payments', label: 'Payments' },
@@ -200,14 +281,13 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
   // Payment Schedule View Component
   function PaymentScheduleView({ contracts }: { contracts: any[] }) {
-    const { getToken } = useAuthToken();
+    const { getHeaders } = useAuthToken();
 
     const { data: summary } = useQuery({
       queryKey: [`${API_BASE_URL}/payments/summary`],
       queryFn: async () => {
-        const token = await getToken();
         const res = await fetch(`${API_BASE_URL}/payments/summary`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: await getHeaders(),
         });
         if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
         return res.json();
@@ -278,14 +358,13 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
 
   // Journal Entries View Component
   function JournalEntriesView({ contracts, onRowClick }: { contracts: any[]; onRowClick?: (leaseId: string) => void }) {
-    const { getToken } = useAuthToken();
+    const { getHeaders } = useAuthToken();
 
     const { data: summary } = useQuery({
       queryKey: [`${API_BASE_URL}/journal-entries/summary`],
       queryFn: async () => {
-        const token = await getToken();
         const res = await fetch(`${API_BASE_URL}/journal-entries/summary`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: await getHeaders(),
         });
         if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
         return res.json();
@@ -332,12 +411,11 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
   const fetchExistingLeaseDetails = async (contractId: string) => {
     setIsLoadingLeaseDetails(true);
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
         `${API_BASE_URL}/leases/${contractId}`,
         {
           headers: {
-            Authorization: `Bearer ${accessToken}`,
+            ...(await getAccessTokenSilently()),
             "Content-Type": "application/json",
           },
         }
@@ -347,21 +425,38 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
       }
 
       console.log("fetched existingLease data successfully", response.data);
+      return true;
     } catch (error) {
-      console.error("Error creating lease", error);
+      console.error("Error fetching lease", error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load contract details',
+        variant: 'destructive',
+      });
+      return false;
     } finally {
       setIsLoadingLeaseDetails(false);
     }
   }
-  const handleDisplayCreateLeaseform = (leaseId?: string) => {
-    dispatch(clearExistingLease());
-    if (leaseId) {
-      setSelectedLeaseId(leaseId)
-      fetchExistingLeaseDetails(leaseId)
-    } else {
-      setSelectedLeaseId("")
+
+  const handleDisplayCreateLeaseform = async (leaseId?: string) => {
+    try {
+      setIsLoadingContract(true);
+      dispatch(clearExistingLease());
+
+      if (leaseId) {
+        setSelectedLeaseId(leaseId);
+        const success = await fetchExistingLeaseDetails(leaseId);
+        if (success) {
+          setOpenLeaseModal(true);
+        }
+      } else {
+        setSelectedLeaseId("");
+        setOpenLeaseModal(true);
+      }
+    } finally {
+      setIsLoadingContract(false);
     }
-    setOpenLeaseModal(true)
   }
   console.log("Selected lease id", selectedLeaseId)
   return (
@@ -390,20 +485,20 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
         <div className='p-6 border-b border-border'>
           <div className='flex items-center justify-between'>
             <div>
-              <h3 className='text-lg font-semibold mb-2'>Contract Administration Dashboard</h3>
-              <p className='text-sm text-muted-foreground'>
+              <h3 className='text-2xl font-bold mb-2'>Contract Administration Dashboard</h3>
+              <p className='text-base text-muted-foreground'>
                 Manage contracts, track payments, and ensure compliance
               </p>
             </div>
             <div className='flex items-center space-x-2'>
               <button
-                className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent transition-colors'
+                className='px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-accent transition-all shadow-sm hover:shadow-md'
                 data-testid='button-filter'
               >
                 <i className='fas fa-filter mr-2'></i>Filter
               </button>
               <button
-                className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent transition-colors'
+                className='px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-accent transition-all shadow-sm hover:shadow-md'
                 data-testid='button-export'
               >
                 <i className='fas fa-download mr-2'></i>Export
@@ -443,16 +538,70 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                 </div>
               ) : (
                 <div>
-                  <div className='flex items-center justify-end'>
-
+                  <div className='flex items-center justify-between mb-6'>
+                    <div className='flex items-center gap-3'>
+                      {contractGroupBy && getGroupedAndSortedContracts().length > 0 && (
+                        <div className='flex items-center gap-2'>
+                          <button
+                            onClick={() => toggleAllContractGroups(true)}
+                            className='px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-accent transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md'
+                          >
+                            <ChevronDown size={16} />
+                            Expand All
+                          </button>
+                          <button
+                            onClick={() => toggleAllContractGroups(false)}
+                            className='px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-accent transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md'
+                          >
+                            <ChevronRight size={16} />
+                            Collapse All
+                          </button>
+                        </div>
+                      )}
+                      <div className='flex items-center gap-2'>
+                        <span className='text-sm text-muted-foreground'>Group by</span>
+                        <select
+                          value={contractGroupBy ?? ''}
+                          onChange={(e) => {
+                            setContractGroupBy((e.target.value || null) as ContractGroupField);
+                            setExpandedContractGroups(new Set());
+                            setCurrentPage(1);
+                          }}
+                          className='text-sm border border-border rounded-md px-2 py-1 bg-background'
+                        >
+                          <option value=''>None</option>
+                          <option value='classification'>Type</option>
+                          <option value='status'>Status</option>
+                          <option value='lessee_name'>Lessee</option>
+                        </select>
+                      </div>
+                    </div>
                     <button
                       onClick={() => handleDisplayCreateLeaseform()}
-                      className='px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90'
+                      className='px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-lg hover:bg-primary/95 active:bg-primary/85 shadow-sm hover:shadow-md transition-all text-base'
                       data-testid='button-new-asc842-schedule'
                     >
                       <i className='fas fa-plus mr-2'></i>Create Lease
                     </button>
                   </div>
+                  {/* Loading Dialog */}
+                  <Dialog open={isLoadingContract}>
+                    <DialogContent
+                      className='!fixed !inset-4 !w-auto !max-w-none !translate-x-0 !translate-y-0 !max-h-none !h-auto !rounded-lg !gap-0 !p-0 overflow-hidden flex items-center justify-center'
+                      style={{
+                        left: '2rem',
+                        right: '2rem',
+                        top: '2rem',
+                        bottom: '2rem',
+                        transform: 'none',
+                      }}
+                    >
+                      <div className='flex flex-col items-center justify-center gap-4'>
+                        <Loader2 className='text-primary animate-spin' size={48} />
+                        <p className='text-lg font-medium text-foreground'>Loading contract details...</p>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <table className='w-full text-sm'>
                     <thead>
                       <tr className='border-b border-border'>
@@ -478,12 +627,33 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedContracts && paginatedContracts.length > 0 ? (
-                        paginatedContracts.map((contract: any) => {
-                          const contractTypeLabel =
-                            contract.classification || contract.contract_type || 'N/A';
-                          const formatDate = (value?: string | null) =>
-                            value ? new Date(value).toLocaleDateString() : 'N/A';
+                      {contractGroupBy ? (
+                        getGroupedAndSortedContracts().length > 0 ? (
+                          getGroupedAndSortedContracts().map(({ key, rows }) => {
+                            const isExpanded = expandedContractGroups.has(key);
+                            return (
+                              <Fragment key={`group-${key}`}>
+                                <tr
+                                  className='bg-muted/40 hover:bg-muted/60 cursor-pointer border-b border-border'
+                                  onClick={() => toggleContractGroup(key)}
+                                >
+                                  <td colSpan={7} className='py-2 px-4'>
+                                    <div className='flex items-center gap-2'>
+                                      {isExpanded ? (
+                                        <ChevronDown size={16} />
+                                      ) : (
+                                        <ChevronRight size={16} />
+                                      )}
+                                      <span className='text-sm font-semibold text-foreground'>{key}</span>
+                                      <span className='text-xs font-normal text-muted-foreground'>({rows.length})</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {isExpanded && rows.map((contract: any) => {
+                                  const contractTypeLabel =
+                                    contract.classification || contract.contract_type || 'N/A';
+                                  const formatDate = (value?: string | null) =>
+                                    value ? new Date(value).toLocaleDateString() : 'N/A';
 
                           return (
                             <tr
@@ -491,8 +661,8 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                               className='border-b border-border hover:bg-muted/50 transition-colors'
                               data-testid={`contract-row-${contract.id}`}
                             >
-                              <td 
-                                className='py-4 px-4 cursor-pointer max-w-[280px]' 
+                              <td
+                                className='py-4 px-4 cursor-pointer max-w-[280px]'
                                 onClick={() => handleDisplayCreateLeaseform(contract.id)}
                                 title={contract.lease_name}
                               >
@@ -501,6 +671,9 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                                   data-testid={`text-contract-name-${contract.id}`}
                                 >
                                   {contract.lease_name}
+                                </p>
+                                <p className='text-xs text-muted-foreground truncate' data-testid={`text-vendor-${contract.id}`}>
+                                  {contract.lessor_name}
                                 </p>
                               </td>
                               <td
@@ -572,27 +745,106 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                               </td>
                             </tr>
                           );
-                        })
-                      ) : (
-                        <tr>
-                          <td colSpan={7} className='py-8 text-center text-muted-foreground'>
-                            <div className='flex flex-col items-center'>
-                              <div className='bg-muted rounded-full w-16 h-16 flex items-center justify-center mb-4'>
-                                <i className='fas fa-file-contract text-2xl'></i>
+                        })}
+                              </Fragment>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={7} className='py-8 text-center text-muted-foreground'>
+                              <div className='flex flex-col items-center'>
+                                <div className='bg-muted rounded-full w-16 h-16 flex items-center justify-center mb-4'>
+                                  <i className='fas fa-file-contract text-2xl'></i>
+                                </div>
+                                <p className='text-lg font-medium mb-2'>No contracts found</p>
+                                <p className='text-sm'>Upload contract documents to get started</p>
                               </div>
-                              <p className='text-lg font-medium mb-2'>No contracts found</p>
-                              <p className='text-sm'>Upload contract documents to get started</p>
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                          </tr>
+                        )
+                      ) : (
+                        paginatedContracts && paginatedContracts.length > 0 ? (
+                          paginatedContracts.map((contract: any) => {
+                            const contractTypeLabel =
+                              contract.classification || contract.contract_type || 'N/A';
+                            const formatDate = (value?: string | null) =>
+                              value ? new Date(value).toLocaleDateString() : 'N/A';
+
+                            return (
+                              <tr
+                                key={contract.id}
+                                className='border-b border-border hover:bg-muted/50 transition-colors'
+                                data-testid={`contract-row-${contract.id}`}
+                              >
+                                <td className='py-4 px-4 cursor-pointer' onClick={() => handleDisplayCreateLeaseform(contract.id)}>
+                                  <div>
+                                    <p className='font-medium' data-testid={`text-contract-name-${contract.id}`}>
+                                      {contract.lease_name}
+                                    </p>
+                                    <p className='text-xs text-muted-foreground' data-testid={`text-vendor-${contract.id}`}>
+                                      {contract.lessor_name}
+                                    </p>
+                                  </div>
+                                </td>
+                                <td className='py-4 px-4 text-muted-foreground' data-testid={`text-lessee-${contract.id}`}>
+                                  {contract.lessee_name || 'N/A'}
+                                </td>
+                                <td className='py-4 px-4'>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getTypeBadge(contractTypeLabel)}`} data-testid={`badge-type-${contract.id}`}>
+                                    {contractTypeLabel}
+                                  </span>
+                                </td>
+                                <td className='py-4 px-4 text-muted-foreground' data-testid={`text-commencement-${contract.id}`}>
+                                  {formatDate(contract.commencement_date)}
+                                </td>
+                                <td className='py-4 px-4 text-muted-foreground' data-testid={`text-end-date-${contract.id}`}>
+                                  {formatDate(contract.end_date)}
+                                </td>
+                                <td className='py-4 px-4'>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(contract.status)}`} data-testid={`badge-status-${contract.id}`}>
+                                    {contract.status}
+                                  </span>
+                                </td>
+                                <td className='py-4 px-4 text-right'>
+                                  <div className='flex items-center justify-end space-x-2'>
+                                    <button className='text-muted-foreground hover:text-foreground p-1' data-testid={`button-view-${contract.id}`}>
+                                      <i className='fas fa-eye'></i>
+                                    </button>
+                                    <button className='text-muted-foreground hover:text-foreground p-1' data-testid={`button-edit-${contract.id}`}>
+                                      <i className='fas fa-edit'></i>
+                                    </button>
+                                    <button onClick={() => handleGenerateSchedule(contract.id, 'ASC842')} className='text-muted-foreground hover:text-foreground p-1' disabled={complianceScheduleMutation.isPending} data-testid={`button-schedule-${contract.id}`}>
+                                      <i className='fas fa-calculator'></i>
+                                    </button>
+                                    <button onClick={() => handleGenerateJournal(contract.id, 'ASC842')} className='text-muted-foreground hover:text-foreground p-1' disabled={journalEntryMutation.isPending} data-testid={`button-journal-${contract.id}`}>
+                                      <i className='fas fa-book'></i>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td colSpan={7} className='py-8 text-center text-muted-foreground'>
+                              <div className='flex flex-col items-center'>
+                                <div className='bg-muted rounded-full w-16 h-16 flex items-center justify-center mb-4'>
+                                  <i className='fas fa-file-contract text-2xl'></i>
+                                </div>
+                                <p className='text-lg font-medium mb-2'>No contracts found</p>
+                                <p className='text-sm'>Upload contract documents to get started</p>
+                              </div>
+                            </td>
+                          </tr>
+                        )
                       )}
                     </tbody>
                   </table>
                 </div>
               )}
 
-              {/* Pagination */}
-              {contracts && contracts.length > 0 && (
+              {/* Pagination - hidden when grouping is active */}
+              {!contractGroupBy && contracts && contracts.length > 0 && (
                 <div className='flex items-center justify-between mt-6'>
                   <p className='text-sm text-muted-foreground'>
                     Showing {startIndex + 1} to {Math.min(endIndex, contracts.length)} of {contracts.length} results
@@ -600,7 +852,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                   <div className='flex items-center space-x-2'>
                     <button
                       onClick={handlePreviousPage}
-                      className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent transition-colors disabled:opacity-50'
+                      className='px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-accent transition-all disabled:opacity-50 shadow-sm hover:shadow-md'
                       disabled={currentPage === 1}
                       data-testid='button-prev-page'
                     >
@@ -610,10 +862,10 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                       <button
                         key={page}
                         onClick={() => handlePageClick(page)}
-                        className={`px-3 py-1 text-sm rounded-md ${
+                        className={`px-4 py-2 text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md ${
                           currentPage === page
-                            ? 'bg-primary text-primary-foreground'
-                            : 'border border-border hover:bg-accent transition-colors'
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/95'
+                            : 'border border-input hover:bg-accent'
                         }`}
                         data-testid={`button-page-${page}`}
                       >
@@ -622,7 +874,7 @@ export function ContractManagement({ initialTab = 'contracts' }: ContractManagem
                     ))}
                     <button
                       onClick={handleNextPage}
-                      className='px-3 py-1 text-sm border border-border rounded-md hover:bg-accent transition-colors disabled:opacity-50'
+                      className='px-4 py-2 text-sm font-medium border border-input rounded-lg hover:bg-accent transition-all disabled:opacity-50 shadow-sm hover:shadow-md'
                       disabled={currentPage >= totalPages}
                       data-testid='button-next-page'
                     >

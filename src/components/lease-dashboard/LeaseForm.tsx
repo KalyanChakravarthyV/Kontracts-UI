@@ -65,17 +65,14 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   const [currenciesLoaded, setCurrenciesLoaded] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [errorFieldIds, setErrorFieldIds] = useState<Set<string>>(new Set());
-  const { getToken: getAccessTokenSilently } = useAuthToken();
+  const { getHeaders } = useAuthToken();
 
   // Fetch currencies from API first - runs only once on mount
   useEffect(() => {
     const fetchCurrencies = async () => {
       try {
-        const token = await getAccessTokenSilently();
         const response = await fetch(`${API_BASE_URL}/currencies/`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: await getHeaders(),
         });
         const data = await response.json();
         // Filter only active currencies
@@ -101,12 +98,12 @@ export function LeaseForm({ existingLease, onSubmit }: LeaseFormProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Only populate form data after currencies are loaded
+  // Populate form data immediately when existingLease is available
   useEffect(() => {
-    if (existingLease && currenciesLoaded) {
+    if (existingLease) {
       setFormData((prev) => ({ ...prev, ...existingLease }));
     }
-  }, [existingLease, currenciesLoaded]);
+  }, [existingLease]);
 
 const handleChange = (field: string, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

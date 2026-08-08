@@ -8,7 +8,7 @@ const CONSENT_ERROR_CODES = new Set([
 ]);
 
 export function useAuthToken() {
-  const { getAccessTokenSilently, loginWithRedirect } = useAuth0();
+  const { getAccessTokenSilently, loginWithRedirect, user } = useAuth0();
   const [location] = useLocation();
 
   const getToken = async (): Promise<string> => {
@@ -30,5 +30,17 @@ export function useAuthToken() {
     }
   };
 
-  return { getToken };
+  const getHeaders = async (): Promise<Record<string, string>> => {
+    const token = await getToken();
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    const orgId = (user as any)?.org_id;
+    if (orgId) {
+      headers['X-Organization-ID'] = orgId;
+    }
+    return headers;
+  };
+
+  return { getToken, getHeaders };
 }

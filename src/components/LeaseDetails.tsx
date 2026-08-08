@@ -42,23 +42,16 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const [isGeneratingJournals, setIsGeneratingJournals] = useState(false)
   useEffect(() => {
     if (contractId) {
-      fetchPayments()
-      fetchASC842Schedule()
-      fetchIFRS16Schedule()
-      fetchJournalEntries()
+      Promise.all([
+        fetchPayments(),
+        fetchASC842Schedule(),
+        fetchIFRS16Schedule(),
+        fetchJournalEntries(),
+      ]);
     }
   }, [contractId])
-
-  // Refetch schedules when payment data changes
-  useEffect(() => {
-    if (contractId && paymentScheduleData && paymentScheduleData.length > 0) {
-      fetchASC842Schedule()
-      fetchIFRS16Schedule()
-    }
-  }, [paymentScheduleData])
   const fetchPayments = async () => {
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
         `${API_BASE_URL}/payments/`,
         {
@@ -69,10 +62,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
             sort_by: "due_date",
             sort_order: "asc",
           },
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
+          headers: { ...(await getHeaders()), "Content-Type": "application/json" },
         }
       );
       if (response && response?.data && response?.data?.length) {
@@ -86,17 +76,11 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   }
    const fetchASC842Schedule = async () => {
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
         `${API_BASE_URL}/schedules/asc842/${contractId}`,
         {
-          params: {
-           format: "json"
-          },
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
+          params: { format: "json" },
+          headers: { ...(await getHeaders()), "Content-Type": "application/json" },
         }
       );
       if (response?.data) {
@@ -110,17 +94,11 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   }
   const fetchIFRS16Schedule = async () => {
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
         `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
         {
-          params: {
-           format: "json"
-          },
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
+          params: { format: "json" },
+          headers: { ...(await getHeaders()), "Content-Type": "application/json" },
         }
       );
       if (response?.data) {
@@ -132,22 +110,16 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
       console.error("Error fetching ifrs16 schedule", error);
     }
   }
-  const { getToken: getAccessTokenSilently } = useAuthToken();
+  const { getHeaders } = useAuthToken();
   
   const exportASC842Schedule = async () => {
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
         `${API_BASE_URL}/schedules/asc842/${contractId}`,
         {
-          params: {
-           format: "excel"
-          },
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          responseType: 'blob'
+          params: { format: "excel" },
+          headers: { ...(await getHeaders()), "Content-Type": "application/json" },
+          responseType: 'blob',
         }
       );
       
@@ -172,18 +144,12 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
   const exportIFRS16Schedule = async () => {
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(
         `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
         {
-          params: {
-           format: "excel"
-          },
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-          responseType: 'blob'
+          params: { format: "excel" },
+          headers: { ...(await getHeaders()), "Content-Type": "application/json" },
+          responseType: 'blob',
         }
       );
       
@@ -213,16 +179,10 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
     try {
       setIsGeneratingASC842(true);
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.post(
         `${API_BASE_URL}/schedules/asc842/${contractId}`,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { ...(await getHeaders()), 'Content-Type': 'application/json' } }
       );
 
       if (response?.data) {
@@ -248,14 +208,9 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
     try {
       setIsGeneratingASC842(true);
-      const accessToken = await getAccessTokenSilently();
       await axios.delete(
         `${API_BASE_URL}/schedules/asc842/${contractId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
+        { headers: await getHeaders() }
       );
 
       console.log('ASC842 schedule deleted successfully');
@@ -285,16 +240,10 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
     try {
       setIsGeneratingIFRS16(true);
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.post(
         `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
         {},
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers: { ...(await getHeaders()), 'Content-Type': 'application/json' } }
       );
 
       if (response?.data) {
@@ -320,14 +269,9 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
     try {
       setIsGeneratingIFRS16(true);
-      const accessToken = await getAccessTokenSilently();
       await axios.delete(
         `${API_BASE_URL}/schedules/ifrs16/${contractId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
+        { headers: await getHeaders() }
       );
 
       console.log('IFRS16 schedule deleted successfully');
@@ -352,10 +296,9 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
   const fetchJournalEntries = async () => {
     if (!contractId) return;
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(`${API_BASE_URL}/journal-entries/`, {
         params: { lease_id: contractId, limit: 1000 },
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: await getHeaders(),
       });
       if (Array.isArray(response.data)) {
         setJournalEntriesData(response.data);
@@ -373,7 +316,6 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     }
     try {
       setIsGeneratingJournals(true);
-      const accessToken = await getAccessTokenSilently();
       const scheduleType = leaseData?.classification === 'finance' ? 'IFRS16' : 'ASC842';
       const hasExisting = journalEntriesData.length > 0;
       const method = hasExisting ? 'put' : 'post';
@@ -382,7 +324,7 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
         {},
         {
           params: { schedule_type: scheduleType },
-          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          headers: { ...(await getHeaders()), 'Content-Type': 'application/json' },
         }
       );
       if (response?.data) {
@@ -421,19 +363,11 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     console.log("submitted create lease payload", values);
 
     try {
-      const accessToken = await getAccessTokenSilently();
-      console.log("accesstoken", accessToken)
-      
       const transformedPayload = transformLeasePayload(values);
       console.log("transformed payload", transformedPayload);
-      
+
       const response = await axios.post(`${API_BASE_URL}/leases/`, transformedPayload,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
+        { headers: { ...(await getHeaders()), "Content-Type": "application/json" } }
       );
       console.log("Lease created successfully", response.data);
       
@@ -454,12 +388,8 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
 
   const fetchLeaseData = async (leaseId: number) => {
     try {
-      const accessToken = await getAccessTokenSilently();
       const response = await axios.get(`${API_BASE_URL}/leases/${leaseId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
+        headers: { ...(await getHeaders()), "Content-Type": "application/json" },
       });
       
       if (response.data) {
@@ -476,21 +406,13 @@ export default function LeaseDetails({ contractId }: LeaseDetailsProps) {
     console.log("submitted update lease payload", values);
 
     try {
-      const accessToken = await getAccessTokenSilently();
-      console.log("accesstoken", accessToken)
-      
       const transformedPayload = transformLeasePayload(values);
       console.log("transformed payload for update", transformedPayload);
-      
+
       // Use createdLeaseId (for newly created leases) or contractId (for existing leases)
       const leaseIdToUpdate = createdLeaseId || contractId;
       const response = await axios.put(`${API_BASE_URL}/leases/${leaseIdToUpdate}`, transformedPayload,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
-        }
+        { headers: { ...(await getHeaders()), "Content-Type": "application/json" } }
       );
       console.log("Lease updated successfully", response.data);
       

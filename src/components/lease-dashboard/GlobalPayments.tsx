@@ -1,13 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/lease-dashboard/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/lease-dashboard/ui/table';
 import { Button } from '@/components/lease-dashboard/ui/button';
-import { DollarSign, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { DollarSign, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
 import { useAuthToken } from '@/hooks/use-auth-token';
+import { useToast } from '@/hooks/use-toast';
 import { API_BASE_URL } from '@/config/api';
+import { ChevronDown as ChevronDownIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { PaymentDetail } from '@/components/PaymentDetail';
+import LeaseModal from '@/components/LeaseModal';
+import LeaseDetails from '@/components/LeaseDetails';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { clearExistingLease, setExistingLease } from '@/store/slices/existingLeaseSlice';
+import axios from 'axios';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 500;
 
 const STATUS_CLASSES: Record<string, string> = {
   Paid: 'bg-green-100 text-green-800',
@@ -44,18 +53,51 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
   const [sortBy, setSortBy] = useState<SortField>('lease_id');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [groupBy, setGroupBy] = useState<GroupField>(null);
-  const { getToken } = useAuthToken();
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [paymentTypeMap, setPaymentTypeMap] = useState<Record<string, string>>({});
+  const [selectedPayment, setSelectedPayment] = useState<any>(null);
+  const [showPaymentDetail, setShowPaymentDetail] = useState(false);
+  const [openLeaseModal, setOpenLeaseModal] = useState(false);
+  const [selectedContractId, setSelectedContractId] = useState<string>('');
+  const [isLoadingContract, setIsLoadingContract] = useState(false);
+  const { getHeaders } = useAuthToken();
+  const { toast } = useToast();
+  const dispatch = useAppDispatch();
+  const { createdLeaseId } = useAppSelector((state) => state.newLease);
 
   const skip = (page - 1) * PAGE_SIZE;
   const totalPages = totalCount ? Math.ceil(totalCount / PAGE_SIZE) : 1;
 
+  // Fetch payment type options on mount
+  const { data: paymentTypeOptions = [] } = useQuery<any[]>({
+    queryKey: [`${API_BASE_URL}/payments/dropdown-options`],
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE_URL}/payments/dropdown-options`, {
+        headers: await getHeaders(),
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      return data.payment_types || [];
+    },
+  });
+
+  // Create a mapping of payment_type_id to name
+  useEffect(() => {
+    if (paymentTypeOptions && paymentTypeOptions.length > 0) {
+      const map = paymentTypeOptions.reduce((acc: Record<string, string>, option: any) => {
+        acc[option.id] = option.name;
+        return acc;
+      }, {});
+      setPaymentTypeMap(map);
+    }
+  }, [paymentTypeOptions]);
+
   const { data: payments = [], isLoading } = useQuery<any[]>({
     queryKey: [`${API_BASE_URL}/payments/`, page, sortBy, sortOrder],
     queryFn: async () => {
-      const token = await getToken();
       const res = await fetch(
         `${API_BASE_URL}/payments/?skip=${skip}&limit=${PAGE_SIZE}&sort_by=${sortBy}&sort_order=${sortOrder}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: await getHeaders() }
       );
       if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
       return res.json();
@@ -73,6 +115,42 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num || 0);
   };
 
+  const handlePaymentClick = (payment: any) => {
+    setSelectedPayment(payment);
+    setShowPaymentDetail(true);
+  };
+
+  const handleViewContract = async (contractId: string) => {
+    try {
+      setIsLoadingContract(true);
+      dispatch(clearExistingLease());
+      setSelectedContractId(contractId);
+      setShowPaymentDetail(false);
+
+      // Fetch the lease details before opening the modal
+      const response = await axios.get(`${API_BASE_URL}/leases/${contractId}`, {
+        headers: await getHeaders(),
+      });
+
+      if (response?.data) {
+        // Dispatch the lease data to Redux so it's available in LeaseDetails
+        dispatch(setExistingLease(response.data));
+
+        // Only open modal after data is fully loaded
+        setOpenLeaseModal(true);
+      }
+    } catch (error) {
+      console.error('Error fetching contract details:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load contract details',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingContract(false);
+    }
+  };
+
   const handleSort = (field: SortField) => {
     if (field === sortBy) {
       setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
@@ -83,9 +161,28 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
     setPage(1);
   };
 
+  const toggleGroup = (key: string) => {
+    const newSet = new Set(expandedGroups);
+    if (newSet.has(key)) {
+      newSet.delete(key);
+    } else {
+      newSet.add(key);
+    }
+    setExpandedGroups(newSet);
+  };
+
+  const toggleAllGroups = (show: boolean) => {
+    if (show) {
+      setExpandedGroups(new Set(grouped.map(g => g.key)));
+    } else {
+      setExpandedGroups(new Set());
+    }
+  };
+
   const getGroupKey = (payment: any): string => {
     if (!groupBy) return '';
     if (groupBy === 'lease_id') return contractName(payment.lease_id);
+    if (groupBy === 'payment_type_id') return paymentTypeMap[payment.payment_type_id] || payment.payment_type_id || '—';
     return String(payment[groupBy] ?? '—');
   };
 
@@ -112,17 +209,42 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
             <CardTitle>Payments</CardTitle>
             <CardDescription>All payments across leases</CardDescription>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Group by</span>
-            <select
-              value={groupBy ?? ''}
-              onChange={(e) => setGroupBy((e.target.value || null) as GroupField)}
-              className="text-sm border border-border rounded-md px-2 py-1 bg-background"
-            >
-              {GROUP_OPTIONS.map((o) => (
-                <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>
-              ))}
-            </select>
+          <div className="flex items-center gap-3">
+            {groupBy && grouped.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleAllGroups(true)}
+                >
+                  <ChevronDownIcon className="size-4 mr-1.5" />
+                  Expand All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleAllGroups(false)}
+                >
+                  <ChevronRightIcon className="size-4 mr-1.5" />
+                  Collapse All
+                </Button>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Group by</span>
+              <select
+                value={groupBy ?? ''}
+                onChange={(e) => {
+                  setGroupBy((e.target.value || null) as GroupField);
+                  setExpandedGroups(new Set());
+                }}
+                className="text-sm border border-border rounded-md px-2 py-1 bg-background"
+              >
+                {GROUP_OPTIONS.map((o) => (
+                  <option key={String(o.value)} value={o.value ?? ''}>{o.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </CardHeader>
@@ -163,33 +285,55 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
                 </TableHeader>
                 <TableBody>
                   {groupBy ? (
-                    grouped.map(({ key, rows }) => (
-                      <>
-                        <TableRow key={`group-${key}`} className="bg-muted/40">
-                          <TableCell colSpan={5} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
-                            {key} <span className="font-normal">({rows.length})</span>
-                          </TableCell>
-                        </TableRow>
-                        {rows.map((payment) => (
-                          <TableRow key={payment.id}>
-                            <TableCell className="font-medium whitespace-nowrap">{contractName(payment.lease_id)}</TableCell>
-                            <TableCell className="text-muted-foreground">{payment.payment_type_id || '—'}</TableCell>
-                            <TableCell className="whitespace-nowrap">{payment.due_date ? new Date(payment.due_date).toLocaleDateString() : '—'}</TableCell>
-                            <TableCell className="text-right font-mono">{formatCurrency(payment.amount)}</TableCell>
-                            <TableCell>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CLASSES[payment.status] ?? 'bg-gray-100 text-gray-800'}`}>
-                                {payment.status}
-                              </span>
+                    grouped.map(({ key, rows }) => {
+                      const isExpanded = expandedGroups.has(key);
+                      return (
+                        <Fragment key={`group-${key}`}>
+                          <TableRow
+                            className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+                            onClick={() => toggleGroup(key)}
+                          >
+                            <TableCell colSpan={5} className="py-2 px-4">
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <ChevronDownIcon className="size-4" />
+                                ) : (
+                                  <ChevronRightIcon className="size-4" />
+                                )}
+                                <span className="text-sm font-semibold text-foreground">{key}</span>
+                                <span className="text-xs font-normal text-muted-foreground">({rows.length})</span>
+                              </div>
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </>
-                    ))
+                          {isExpanded && rows.map((payment) => (
+                            <TableRow
+                              key={payment.id}
+                              onClick={() => handlePaymentClick(payment)}
+                              className="cursor-pointer hover:bg-muted/80 transition-colors"
+                            >
+                              <TableCell className="font-medium whitespace-nowrap">{contractName(payment.lease_id)}</TableCell>
+                              <TableCell className="text-muted-foreground">{paymentTypeMap[payment.payment_type_id] || payment.payment_type_id || '—'}</TableCell>
+                              <TableCell className="whitespace-nowrap">{payment.due_date ? new Date(payment.due_date).toLocaleDateString() : '—'}</TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(payment.amount)}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_CLASSES[payment.status] ?? 'bg-gray-100 text-gray-800'}`}>
+                                  {payment.status}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })
                   ) : (
                     payments.map((payment: any) => (
-                      <TableRow key={payment.id}>
+                      <TableRow
+                        key={payment.id}
+                        onClick={() => handlePaymentClick(payment)}
+                        className="cursor-pointer hover:bg-muted/80 transition-colors"
+                      >
                         <TableCell className="font-medium whitespace-nowrap">{contractName(payment.lease_id)}</TableCell>
-                        <TableCell className="text-muted-foreground">{payment.payment_type_id || '—'}</TableCell>
+                        <TableCell className="text-muted-foreground">{paymentTypeMap[payment.payment_type_id] || payment.payment_type_id || '—'}</TableCell>
                         <TableCell className="whitespace-nowrap">{payment.due_date ? new Date(payment.due_date).toLocaleDateString() : '—'}</TableCell>
                         <TableCell className="text-right font-mono">{formatCurrency(payment.amount)}</TableCell>
                         <TableCell>
@@ -213,19 +357,74 @@ export function GlobalPayments({ totalCount, contracts = [] }: GlobalPaymentsPro
               </p>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>
-                  <ChevronLeft className="size-4" />Previous
+                  <ChevronLeft className="size-4 mr-1" />Previous
                 </Button>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground">
                   Page {page}{totalPages > 1 ? ` of ${totalPages}` : ''}
                 </span>
                 <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)} disabled={payments.length < PAGE_SIZE || page >= totalPages}>
-                  Next<ChevronRight className="size-4" />
+                  Next<ChevronRight className="size-4 ml-1" />
                 </Button>
               </div>
             </div>
           </>
         )}
       </CardContent>
+
+      {/* Payment Detail Modal */}
+      <Dialog open={showPaymentDetail} onOpenChange={setShowPaymentDetail}>
+        <DialogContent
+          className="!fixed !inset-4 !w-auto !max-w-none !translate-x-0 !translate-y-0 !max-h-none !h-auto !rounded-lg !gap-0 !p-0 overflow-hidden"
+          style={{
+            left: '2rem',
+            right: '2rem',
+            top: '2rem',
+            bottom: '2rem',
+            transform: 'none',
+          }}
+        >
+          <div className="h-full w-full overflow-y-auto p-6">
+            {selectedPayment && (
+              <PaymentDetail
+                paymentId={selectedPayment.id}
+                contractId={selectedPayment.lease_id}
+                contractName={contractName(selectedPayment.lease_id)}
+                onClose={() => setShowPaymentDetail(false)}
+                onViewContract={handleViewContract}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Loading Dialog */}
+      <Dialog open={isLoadingContract}>
+        <DialogContent
+          className="!fixed !inset-4 !w-auto !max-w-none !translate-x-0 !translate-y-0 !max-h-none !h-auto !rounded-lg !gap-0 !p-0 overflow-hidden flex items-center justify-center"
+          style={{
+            left: '2rem',
+            right: '2rem',
+            top: '2rem',
+            bottom: '2rem',
+            transform: 'none',
+          }}
+        >
+          <div className="flex flex-col items-center justify-center gap-4">
+            <Loader2 className="text-primary animate-spin" size={48} />
+            <p className="text-lg font-medium text-foreground">Loading contract details...</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lease/Contract Details Modal */}
+      {openLeaseModal && (
+        <LeaseModal
+          open={openLeaseModal}
+          onOpenChange={setOpenLeaseModal}
+        >
+          <LeaseDetails contractId={parseInt(selectedContractId) || 0} />
+        </LeaseModal>
+      )}
     </Card>
   );
 }

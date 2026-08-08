@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/lease-dashboard/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/lease-dashboard/ui/table';
 import { Badge } from '@/components/lease-dashboard/ui/badge';
 import { Button } from '@/components/lease-dashboard/ui/button';
-import { FileText, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2 } from 'lucide-react';
+import { FileText, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, ChevronDown as ChevronDownIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import { useAuthToken } from '@/hooks/use-auth-token';
 import { API_BASE_URL } from '@/config/api';
 import type { JournalEntryResponse, JournalEntryType, LeaseAccount } from './JournalEntries';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 500;
 
 const ACCOUNT_LABELS: Record<LeaseAccount, string> = {
   rou_asset: 'ROU Asset',
@@ -65,7 +65,8 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
   const [groupBy, setGroupBy] = useState<GroupField>(null);
   const [yearFilter, setYearFilter] = useState<string>('');
-  const { getToken } = useAuthToken();
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const { getHeaders } = useAuthToken();
 
   const skip = (page - 1) * PAGE_SIZE;
   const totalPages = totalCount ? Math.ceil(totalCount / PAGE_SIZE) : 1;
@@ -73,10 +74,9 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
   const { data: entries = [], isLoading } = useQuery<JournalEntryResponse[]>({
     queryKey: [`${API_BASE_URL}/journal-entries/`, page],
     queryFn: async () => {
-      const token = await getToken();
       const res = await fetch(
         `${API_BASE_URL}/journal-entries/?skip=${skip}&limit=${PAGE_SIZE}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: await getHeaders() }
       );
       if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
       return res.json();
@@ -100,6 +100,24 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
     } else {
       setSortBy(field);
       setSortOrder('asc');
+    }
+  };
+
+  const toggleGroup = (key: string) => {
+    const newSet = new Set(expandedGroups);
+    if (newSet.has(key)) {
+      newSet.delete(key);
+    } else {
+      newSet.add(key);
+    }
+    setExpandedGroups(newSet);
+  };
+
+  const toggleAllGroups = (show: boolean) => {
+    if (show) {
+      setExpandedGroups(new Set(grouped.map(g => g.key)));
+    } else {
+      setExpandedGroups(new Set());
     }
   };
 
@@ -181,11 +199,34 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                 ))}
               </select>
             </div>
+            {groupBy && grouped.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleAllGroups(true)}
+                >
+                  <ChevronDownIcon className="size-4 mr-1.5" />
+                  Expand All
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => toggleAllGroups(false)}
+                >
+                  <ChevronRightIcon className="size-4 mr-1.5" />
+                  Collapse All
+                </Button>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Group by</span>
               <select
                 value={groupBy ?? ''}
-                onChange={(e) => setGroupBy((e.target.value || null) as GroupField)}
+                onChange={(e) => {
+                  setGroupBy((e.target.value || null) as GroupField);
+                  setExpandedGroups(new Set());
+                }}
                 className="text-sm border border-border rounded-md px-2 py-1 bg-background"
               >
                 {GROUP_OPTIONS.map((o) => (
@@ -238,39 +279,53 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                 </TableHeader>
                 <TableBody>
                   {groupBy ? (
-                    grouped.map(({ key, rows }) => (
-                      <>
-                        <TableRow key={`group-${key}`} className="bg-muted/40">
-                          <TableCell colSpan={8} className="py-2 px-4 text-sm font-semibold text-muted-foreground">
-                            {key} <span className="font-normal">({rows.length})</span>
-                          </TableCell>
-                        </TableRow>
-                        {rows.map((entry) => (
-                          <TableRow 
-                            key={entry.id} 
-                            className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
-                            onClick={() => onRowClick?.(String(entry.lease_id))}
+                    grouped.map(({ key, rows }) => {
+                      const isExpanded = expandedGroups.has(key);
+                      return (
+                        <Fragment key={`group-${key}`}>
+                          <TableRow
+                            className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+                            onClick={() => toggleGroup(key)}
                           >
-                            <TableCell className="font-medium whitespace-nowrap text-blue-600 hover:underline">{contractName(entry.lease_id)}</TableCell>
-                            <TableCell className="whitespace-nowrap">{new Date(entry.entry_date).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <Badge variant={ENTRY_TYPE_CONFIG[entry.entry_type]?.variant ?? 'outline'}>
-                                {ENTRY_TYPE_CONFIG[entry.entry_type]?.label ?? entry.entry_type}
-                              </Badge>
+                            <TableCell colSpan={8} className="py-2 px-4">
+                              <div className="flex items-center gap-2">
+                                {isExpanded ? (
+                                  <ChevronDownIcon className="size-4" />
+                                ) : (
+                                  <ChevronRightIcon className="size-4" />
+                                )}
+                                <span className="text-sm font-semibold text-foreground">{key}</span>
+                                <span className="text-xs font-normal text-muted-foreground">({rows.length})</span>
+                              </div>
                             </TableCell>
-                            <TableCell className="max-w-xs truncate">{entry.description}</TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{ACCOUNT_LABELS[entry.debit_account] ?? entry.debit_account}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{ACCOUNT_LABELS[entry.credit_account] ?? entry.credit_account}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-mono">{formatCurrency(entry.amount)}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm">{entry.reference ?? '—'}</TableCell>
                           </TableRow>
-                        ))}
-                      </>
-                    ))
+                          {isExpanded && rows.map((entry) => (
+                            <TableRow
+                              key={entry.id}
+                              className="cursor-pointer hover:bg-blue-50 transition-colors duration-150"
+                              onClick={() => onRowClick?.(String(entry.lease_id))}
+                            >
+                              <TableCell className="font-medium whitespace-nowrap text-blue-600 hover:underline">{contractName(entry.lease_id)}</TableCell>
+                              <TableCell className="whitespace-nowrap">{new Date(entry.entry_date).toLocaleDateString()}</TableCell>
+                              <TableCell>
+                                <Badge variant={ENTRY_TYPE_CONFIG[entry.entry_type]?.variant ?? 'outline'}>
+                                  {ENTRY_TYPE_CONFIG[entry.entry_type]?.label ?? entry.entry_type}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate">{entry.description}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{ACCOUNT_LABELS[entry.debit_account] ?? entry.debit_account}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{ACCOUNT_LABELS[entry.credit_account] ?? entry.credit_account}</Badge>
+                              </TableCell>
+                              <TableCell className="text-right font-mono">{formatCurrency(entry.amount)}</TableCell>
+                              <TableCell className="text-muted-foreground text-sm">{entry.reference ?? '—'}</TableCell>
+                            </TableRow>
+                          ))}
+                        </Fragment>
+                      );
+                    })
                   ) : (
                     sortedEntries.map((entry) => (
                       <TableRow 
@@ -315,10 +370,10 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
                 >
-                  <ChevronLeft className="size-4" />
+                  <ChevronLeft className="size-4 mr-1" />
                   Previous
                 </Button>
-                <span className="text-sm text-muted-foreground">
+                <span className="text-sm font-medium text-muted-foreground">
                   Page {page}{totalPages > 1 ? ` of ${totalPages}` : ''}
                 </span>
                 <Button
@@ -328,7 +383,7 @@ export function GlobalJournalEntries({ totalCount, currency = 'USD', contracts =
                   disabled={entries.length < PAGE_SIZE || page >= totalPages}
                 >
                   Next
-                  <ChevronRight className="size-4" />
+                  <ChevronRight className="size-4 ml-1" />
                 </Button>
               </div>
             </div>

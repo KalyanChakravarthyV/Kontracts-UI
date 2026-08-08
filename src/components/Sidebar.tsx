@@ -83,19 +83,6 @@ export function Sidebar() {
             <i className='fas fa-chart-pie w-5'></i>
             {!isCollapsed && <span>Dashboard</span>}
           </Link>
-          <Link
-            href='/ai-recommendations'
-            className={`flex items-center space-x-3 px-3 py-2 rounded-md transition-colors ${
-              location === '/ai-recommendations'
-                ? 'bg-accent text-accent-foreground font-medium'
-                : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-            }`}
-            data-testid='link-ai-recommendations'
-            title={isCollapsed ? 'AI Recommendations' : ''}
-          >
-            <i className='fas fa-robot w-5'></i>
-            {!isCollapsed && <span>AI Recommendations</span>}
-          </Link>
         </div>
 
         <div className='space-y-1 pt-4'>

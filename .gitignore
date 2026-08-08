@@ -33,3 +33,6 @@ dist-ssr
 # Vercel
 .vercel
 .env*.local
+
+# Local API reference docs
+openapi.json

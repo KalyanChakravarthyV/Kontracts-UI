@@ -75,7 +75,7 @@ export function PaymentSchedule({
 }: PaymentScheduleProps) {
 
   const dispatch = useAppDispatch();
-  const { getToken: getAccessTokenSilently } = useAuthToken();
+  const { getHeaders: getAccessTokenSilently } = useAuthToken();
   
   // Get created lease ID from Redux store
   const { createdLeaseId } = useAppSelector((state) => state.newLease);
@@ -189,13 +189,9 @@ export function PaymentSchedule({
 
     const fetchPaymentTypeOptions = async () => {
       try {
-        const accessToken = await getAccessTokenSilently();
         const response = await fetch(`${API_BASE_URL}/payments/dropdown-options`, {
           method: 'GET',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { ...(await getAccessTokenSilently()), 'Content-Type': 'application/json' },
         });
         const data = await response.json();
         if (data.payment_types && data.payment_types.length > 0) {
@@ -212,7 +208,7 @@ export function PaymentSchedule({
 
     fetchPaymentTypeOptions();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractId]);
+  }, []);
 
   // Fetch payment summary - runs when contractId changes
   useEffect(() => {
@@ -220,11 +216,8 @@ export function PaymentSchedule({
       if (!contractId) return;
 
       try {
-        const accessToken = await getAccessTokenSilently();
         const response = await fetch(`${API_BASE_URL}/payments/lease/${contractId}/summary`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
+          headers: await getAccessTokenSilently(),
         });
 
         if (response.ok) {
@@ -382,14 +375,9 @@ const getStatusBadge = (status: string) => {
     if (!paymentId) return;
 
     try {
-      const accessToken = await getAccessTokenSilently();
-      
       const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...(await getAccessTokenSilently()), 'Content-Type': 'application/json' },
       });
 
       if (!response.ok) {
@@ -440,16 +428,11 @@ const getStatusBadge = (status: string) => {
     if (selectedPaymentIds.size === 0) return;
 
     try {
-      const accessToken = await getAccessTokenSilently();
       const paymentIds = Array.from(selectedPaymentIds);
 
-      // Call bulk delete API
       const response = await fetch(`${API_BASE_URL}/payments/bulk-delete`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...(await getAccessTokenSilently()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ payment_ids: paymentIds }),
       });
 
@@ -474,8 +457,6 @@ const getStatusBadge = (status: string) => {
   // Mark payment as paid
   const handleMarkAsPaid = async (paymentId: string) => {
     try {
-      const accessToken = await getAccessTokenSilently();
-      
       if (!contractId) {
         dispatch(setErrorMessage('No contract ID available'));
         return;
@@ -488,7 +469,7 @@ const getStatusBadge = (status: string) => {
       }
 
       const currentDate = new Date().toISOString();
-      
+
       const payload = {
         lease_id: contractId.toString(),
         due_date: payment.due_date,
@@ -502,10 +483,7 @@ const getStatusBadge = (status: string) => {
 
       const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
         method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...(await getAccessTokenSilently()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
@@ -536,7 +514,6 @@ const getStatusBadge = (status: string) => {
 
     try {
       setIsSaving(true);
-      const accessToken = await getAccessTokenSilently();
 
       if (!contractId) {
         dispatch(setErrorMessage('No contract ID available'));
@@ -555,10 +532,7 @@ const getStatusBadge = (status: string) => {
       console.log("update payload", payload)
       const response = await fetch(`${API_BASE_URL}/payments/${paymentId}`, {
         method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { ...(await getAccessTokenSilently()), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
@@ -597,7 +571,6 @@ const getStatusBadge = (status: string) => {
   }) => {
     try {
       setIsWizardGenerating(true);
-      const accessToken = await getAccessTokenSilently();
       const leaseId = createdLeaseId || contractId?.toString();
 
       if (!leaseId) {
@@ -605,13 +578,9 @@ const getStatusBadge = (status: string) => {
         return;
       }
 
-      // Call the wizard API endpoint
       const response = await fetch(`${API_BASE_URL}/payments/wizard/${leaseId}`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { ...(await getAccessTokenSilently()), 'Content-Type': 'application/json' },
         body: JSON.stringify(wizardData),
       });
 
@@ -636,13 +605,12 @@ const getStatusBadge = (status: string) => {
 
   // Save new payment (POST API call)
   const handleSavePayment = async () => {
-     const accessToken = await getAccessTokenSilently();
     try {
       setIsSaving(true);
 
       // Determine which lease ID to use: createdLeaseId (new lease) or contractId (existing lease)
       const leaseId = createdLeaseId || contractId?.toString();
-      
+
       if (!leaseId) {
         setAlertMessage('No lease ID available. Please create or select a lease first.');
         setIsSaving(false);
@@ -676,13 +644,9 @@ const getStatusBadge = (status: string) => {
       };
 
       console.log('Posting payment:', payload);
-      // Make POST API call
       const response = await fetch(`${API_BASE_URL}/payments/`, {
         method: 'POST',
-        headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "Content-Type": "application/json",
-          },
+        headers: { ...(await getAccessTokenSilently()), "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
